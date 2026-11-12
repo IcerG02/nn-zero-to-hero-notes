@@ -1,0 +1,1160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>micrograd por dentro</title>
+<!--
+  Aula 01 · micrograd — material de estudo pessoal.
+  Trechos de código adaptados de Andrej Karpathy, nn-zero-to-hero (lectures/micrograd).
+  MIT License · Copyright (c) 2022 Andrej Karpathy — texto completo da licença no último slide.
+-->
+<style>
+
+
+
+
+
+
+
+
+
+
+
+:root{
+  --bg:#E9ECF1; --paper:#FFFFFF; --soft:#F4F6F9; --sunk:#E5E9EF;
+  --line:#D7DCE3; --line-2:#B9C1CC;
+  --ink:#12161C; --muted:#5B6573; --faint:#8A94A2;
+  --acc:#4652C9; --acc-soft:#E8EAFB;
+  --warn:#BE3A5A; --warn-soft:#FBE8ED;
+  --ok:#2F7A47; --ok-soft:#E1F1E6;
+  --gold:#A86F08;
+  --code-bg:#151A22; --code-ink:#DCE2EA; --code-dim:#7D8899;
+  --k:#9CA6FF; --s:#8FD6A8; --n:#F2B866; --c:#7D8899; --f:#7FD3E6; --self:#F29BB0;
+  --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+    --line:#252C37; --line-2:#3A4452;
+    --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+    --acc:#8F98F5; --acc-soft:#1D2147;
+    --warn:#F07A96; --warn-soft:#3A1A23;
+    --ok:#62C283; --ok-soft:#15291C;
+    --gold:#E5B04A;
+    --code-bg:#0B0E13;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+  --line:#252C37; --line-2:#3A4452;
+  --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+  --acc:#8F98F5; --acc-soft:#1D2147;
+  --warn:#F07A96; --warn-soft:#3A1A23;
+  --ok:#62C283; --ok-soft:#15291C;
+  --gold:#E5B04A;
+  --code-bg:#0B0E13;
+}
+*{box-sizing:border-box}
+html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; overflow:hidden}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:4px}
+
+/* ------- stage ------- */
+.viewport{position:fixed; inset:0; display:grid; place-items:center}
+.deck{position:relative; width:1280px; height:720px; transform-origin:center center; flex:none}
+.slide{position:absolute; inset:0; background:var(--paper); border-radius:14px; box-shadow:0 2px 4px rgba(0,0,0,.05), 0 30px 60px -30px rgba(0,0,0,.35);
+  padding:56px 76px 64px; display:none; flex-direction:column; overflow:hidden}
+.slide.on{display:flex}
+.progress{position:absolute; left:0; top:0; height:4px; background:var(--acc); border-radius:14px 0 0 0; transition:width .25s ease; z-index:5}
+.eyebrow{font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--acc); margin-bottom:10px}
+h1,h2,h3{font-family:var(--serif); margin:0; text-wrap:balance; letter-spacing:-.01em}
+h2{font-weight:600; font-size:38px; line-height:1.12; margin-bottom:24px}
+h3{font-weight:600; font-size:20px; margin-bottom:10px}
+p{margin:0 0 14px; font-size:19px; line-height:1.55; max-width:62ch}
+p.lead{font-size:21px; color:var(--ink)}
+.muted{color:var(--muted)}
+.small{font-size:15.5px; line-height:1.55}
+ul.clean{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+ul.clean li{font-size:18px; line-height:1.5; padding-left:22px; position:relative}
+ul.clean li::before{content:""; position:absolute; left:2px; top:.62em; width:8px; height:8px; border-radius:2px; background:var(--acc)}
+.foot{position:absolute; left:76px; right:76px; bottom:22px; display:flex; justify-content:space-between; font-size:12.5px; color:var(--faint); font-family:var(--mono)}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:44px; align-items:start; flex:1; min-height:0}
+.cols.wide-left{grid-template-columns:1.15fr .85fr}
+.cols.wide-right{grid-template-columns:.85fr 1.15fr}
+.stack{display:flex; flex-direction:column; gap:18px; min-width:0}
+code.i{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:1px 6px; border-radius:4px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* code */
+pre.code{margin:0; background:var(--code-bg); color:var(--code-ink); border-radius:10px; padding:18px 20px; font-family:var(--mono); font-size:15.5px; line-height:1.62; overflow:auto; white-space:pre; tab-size:4}
+pre.code.sm{font-size:14px; line-height:1.55; padding:16px 18px}
+pre.code .k{color:var(--k)} pre.code .s{color:var(--s)} pre.code .n{color:var(--n)}
+pre.code .c{color:var(--c); font-style:italic} pre.code .f{color:var(--f)} pre.code .self{color:var(--self)}
+
+/* boxes */
+.box{border-radius:10px; padding:16px 18px; background:var(--soft); border:1px solid var(--line)}
+.box .tag{font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px}
+.box p{font-size:16.5px; margin:0; max-width:none}
+.box p + p{margin-top:8px}
+.box.trap{background:var(--warn-soft); border-color:transparent}
+.box.trap .tag{color:var(--warn)}
+.box.key{background:var(--acc-soft); border-color:transparent}
+.box.key .tag{color:var(--acc)}
+.box.okb{background:var(--ok-soft); border-color:transparent}
+.box.okb .tag{color:var(--ok)}
+
+/* math lines */
+.eq{font-family:var(--mono); font-size:18px; line-height:1.9; font-variant-numeric:tabular-nums}
+.eq b{color:var(--acc); font-weight:500}
+.eq .r{color:var(--muted)}
+
+/* tables */
+table.t{border-collapse:collapse; width:100%; font-size:16.5px}
+table.t th{text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:0 12px 8px 0; border-bottom:1px solid var(--line-2)}
+table.t td{padding:10px 12px 10px 0; border-bottom:1px solid var(--line); vertical-align:top}
+table.t td.num{font-family:var(--mono)}
+table.t tr.hl td{background:var(--warn-soft)}
+
+/* figures */
+figure{margin:0}
+figure svg{display:block; width:100%; height:auto; overflow:visible}
+figcaption{font-size:14px; color:var(--muted); margin-top:10px; line-height:1.5}
+.reveal-btn{margin-top:14px; align-self:flex-start; border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer}
+.reveal-btn:hover{border-color:var(--acc); color:var(--acc)}
+svg .gval{opacity:0} .shown svg .gval{opacity:1} .shown svg .gq{opacity:0}
+svg .gq{fill:var(--faint)}
+
+/* cover */
+.cover{justify-content:center; padding-left:96px}
+.cover h1{font-size:76px; font-weight:600; line-height:1.02; margin:6px 0 22px; letter-spacing:-.02em}
+.cover h1 em{font-style:italic; font-weight:500; color:var(--acc)}
+.cover .lead{font-size:23px; max-width:40ch; color:var(--muted); line-height:1.45}
+.cover .meta{margin-top:40px; display:flex; gap:40px; font-size:14.5px; color:var(--muted)}
+.cover .meta b{display:block; color:var(--ink); font-weight:600; font-size:15.5px; margin-bottom:2px}
+.keys{position:absolute; left:96px; bottom:44px; font-size:13.5px; color:var(--faint)}
+.keys kbd{font-family:var(--mono); font-size:12px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--muted); background:var(--soft)}
+
+/* map */
+.steps{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:6px}
+.step{border-top:3px solid var(--acc); padding-top:12px}
+.step .n{font-family:var(--mono); font-size:13px; color:var(--acc)}
+.step b{display:block; font-family:var(--serif); font-size:19px; font-weight:600; margin:4px 0 6px; line-height:1.2}
+.step span{font-size:14.5px; color:var(--muted); line-height:1.45}
+
+/* block divider slides */
+.divider{justify-content:center}
+.divider .bn{font-family:var(--mono); font-size:15px; color:var(--acc); margin-bottom:12px}
+.divider h2{font-size:58px; margin-bottom:18px}
+.divider p{font-size:22px; color:var(--muted); max-width:46ch}
+
+/* Q&A */
+.qa{display:flex; flex-direction:column; gap:14px}
+.q{border:1px solid var(--line); border-radius:10px; padding:14px 18px; background:var(--soft)}
+.q .qt{font-size:18px; line-height:1.45; display:flex; gap:12px}
+.q .qt .qn{font-family:var(--mono); color:var(--acc); font-size:15px; padding-top:2px}
+.q button{margin-top:10px; margin-left:30px; border:0; background:none; padding:0; font-size:14px; font-weight:600; color:var(--acc); cursor:pointer}
+.q .a{display:none; margin:8px 0 0 30px; font-size:16.5px; line-height:1.5; color:var(--ink); padding-left:12px; border-left:2px solid var(--ok)}
+.q.open .a{display:block}
+.q.open button{display:none}
+
+/* checklist */
+.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+.check li{display:grid; grid-template-columns:22px 1fr; gap:12px; font-size:18px; line-height:1.45}
+.check li::before{content:""; width:18px; height:18px; border:1.5px solid var(--line-2); border-radius:5px; margin-top:3px}
+.copy{border:1px solid var(--line-2); background:var(--paper); border-radius:7px; padding:5px 11px; font-size:12.5px; font-weight:600; cursor:pointer; letter-spacing:.04em}
+.copy:hover{border-color:var(--acc); color:var(--acc)}
+
+/* chrome: nav + index */
+.nav{position:fixed; right:18px; bottom:16px; display:flex; gap:6px; z-index:20}
+.nav button{border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:6px 11px; font-size:13px; font-weight:600; cursor:pointer}
+.nav button:hover{border-color:var(--acc); color:var(--acc)}
+.nav .count{font-family:var(--mono); font-size:12.5px; color:var(--muted); padding:7px 6px}
+.index{position:fixed; top:0; left:0; bottom:0; width:380px; background:var(--paper); border-right:1px solid var(--line); z-index:30; transform:translateX(-102%); transition:transform .22s ease; overflow:auto; padding:22px 20px}
+.index.open{transform:none; box-shadow:0 0 60px rgba(0,0,0,.25)}
+.index h4{font-family:var(--serif); font-size:20px; margin:0 0 4px}
+.index .hint{font-size:12.5px; color:var(--muted); margin-bottom:16px}
+.index .grp{font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--acc); margin:16px 0 6px}
+.index a{display:grid; grid-template-columns:30px 1fr; gap:6px; padding:6px 8px; border-radius:6px; font-size:14px; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.35}
+.index a span{font-family:var(--mono); font-size:12px; color:var(--faint); padding-top:1px}
+.index a:hover{background:var(--soft)}
+.index a.cur{background:var(--acc-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="viewport"><div class="deck" id="deck"><div class="progress" id="progress"></div>
+
+<!-- =================================================================== CAPA -->
+<section class="slide cover" data-block="Abertura" data-title="Capa">
+  <div class="eyebrow">Aula 01 · Fase 1 · Semana S02</div>
+  <h1>micrograd<br><em>por dentro</em></h1>
+  <p class="lead">Backpropagation do zero, em cerca de cem linhas de Python: da inclinação de uma parábola até uma rede neural que aprende.</p>
+  <div class="meta">
+    <div><b>Base</b>Andrej Karpathy · Neural Networks: Zero to Hero</div>
+    <div><b>Código</b>lectures/micrograd · 2 notebooks</div>
+    <div><b>Duração de revisão</b>~25 minutos</div>
+  </div>
+  <div class="keys"><kbd>←</kbd> <kbd>→</kbd> navegar · <kbd>I</kbd> índice · as perguntas escondem a resposta até você clicar</div>
+</section>
+
+<section class="slide" data-block="Abertura" data-title="O mapa da aula">
+  <div class="eyebrow">O mapa da aula</div>
+  <h2>Cinco passos, cada um apoiado no anterior</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><b>Derivada é sensibilidade</b><span>Quanto a saída se mexe quando a entrada se mexe um pouco.</span></div>
+    <div class="step"><div class="n">2</div><b>O objeto Value</b><span>Um número que lembra de onde veio. Assim nasce o grafo.</span></div>
+    <div class="step"><div class="n">3</div><b>Backprop à mão</b><span>Regra da cadeia, nó por nó, do fim para o começo.</span></div>
+    <div class="step"><div class="n">4</div><b>Backprop automático</b><span>Cada operação guarda sua regra; a ordem topológica faz o resto.</span></div>
+    <div class="step"><div class="n">5</div><b>De uma conta a uma rede</b><span>Neurônio, camada, MLP, loss e o loop de treino.</span></div>
+  </div>
+  <div class="box key" style="margin-top:34px">
+    <div class="tag">Ao final você deve conseguir</div>
+    <p>Reescrever o <code class="i">Value</code> sem olhar · calcular à mão o gradiente de um grafo pequeno · explicar por que é <code class="i">+=</code> e não <code class="i">=</code> · montar o loop de treino na ordem certa.</p>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 1 -->
+<section class="slide divider" data-block="1 · Derivada" data-title="Bloco 1">
+  <div class="bn">Bloco 1 de 5</div>
+  <h2>Derivada é sensibilidade</h2>
+  <p>Antes de qualquer rede: o que significa, na prática, a derivada de uma função num ponto.</p>
+</section>
+
+<section class="slide" data-block="1 · Derivada" data-title="Empurrar a entrada e medir a saída">
+  <div class="eyebrow">Bloco 1 · Derivada</div>
+  <h2>Empurre a entrada um pouquinho e meça a saída</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>A derivada é a razão entre o quanto a saída andou e o quanto você empurrou a entrada, com um empurrão <code class="i">h</code> bem pequeno. Geometricamente, é a inclinação da curva naquele ponto.</p>
+<pre class="code" data-py>def f(x):
+    return 3*x**2 - 4*x + 5
+
+h = 0.000001
+x = 3.0
+(f(x + h) - f(x)) / h    # ≈ 14.0</pre>
+      <div class="box key"><div class="tag">Confira pela regra</div><p><span class="num">f′(x) = 6x − 4</span> → <span class="num">f′(3) = 14</span> e <span class="num">f′(2/3) = 0</span>, o fundo da parábola.</p></div>
+    </div>
+    <figure><svg id="chartParabola" viewBox="0 0 520 400" role="img" aria-label="Parábola f(x)=3x²−4x+5 com retas tangentes em x=3 e x=2/3"></svg>
+      <figcaption>Em <span class="num">x = 3</span> a curva sobe 14 para cada unidade de x. Em <span class="num">x = 2/3</span> ela está plana: inclinação zero.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" data-block="1 · Derivada" data-title="Várias entradas">
+  <div class="eyebrow">Bloco 1 · Derivada</div>
+  <h2>Várias entradas, uma sensibilidade para cada</h2>
+  <div class="cols wide-right">
+    <div class="stack">
+<pre class="code" data-py>a, b, c = 2.0, -3.0, 10.0
+d = a*b + c        # 4.0
+
+# empurra só c e mede
+h = 0.0001
+d2 = a*b + (c + h)
+(d2 - d) / h       # ≈ 1.0</pre>
+      <div class="box trap"><div class="tag">Armadilha</div><p>Um <code class="i">h</code> pequeno demais quebra a conta: com ponto flutuante, <span class="num">f(x+h) − f(x)</span> vira ruído. A estimativa numérica serve para <b>conferir</b>, não para treinar.</p></div>
+    </div>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Empurrando</th><th>d muda</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td class="num">a</td><td class="num">−3 por unidade</td><td>em <span class="num">a·b</span>, cada unidade de a vale b</td></tr>
+          <tr><td class="num">b</td><td class="num">+2 por unidade</td><td>e cada unidade de b vale a</td></tr>
+          <tr><td class="num">c</td><td class="num">+1 por unidade</td><td>c entra somando: passa direto</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted" style="margin-top:6px">Essa tabela é exatamente o que o backprop calcula. A diferença é que ele não empurra nada: usa as regras de derivada de cada operação.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 2 -->
+<section class="slide divider" data-block="2 · Value" data-title="Bloco 2">
+  <div class="bn">Bloco 2 de 5</div>
+  <h2>O objeto Value</h2>
+  <p>Para derivar automaticamente, cada número precisa lembrar de quais números e de qual operação ele veio.</p>
+</section>
+
+<section class="slide" data-block="2 · Value" data-title="Value: um número com memória">
+  <div class="eyebrow">Bloco 2 · Value</div>
+  <h2>Um número que lembra de onde veio</h2>
+  <div class="cols wide-left">
+<pre class="code" data-py>class Value:
+    def __init__(self, data, _children=(), _op='', label=''):
+        self.data = data              # o número em si
+        self.grad = 0.0               # dL/d(este nó)
+        self._backward = lambda: None # regra local, vem depois
+        self._prev = set(_children)   # quem gerou este nó
+        self._op = _op                # com qual operação
+        self.label = label            # nome, para desenhar</pre>
+    <ul class="clean">
+      <li><b>data</b> é o valor calculado no forward.</li>
+      <li><b>grad</b> começa em zero porque é um acumulador: o backward vai somando nele.</li>
+      <li><b>_prev</b> e <b>_op</b> são a memória do grafo: de quem e de que conta este nó saiu.</li>
+      <li><b>_backward</b> é preenchida por cada operação com a sua derivada local. É o assunto do Bloco 4.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" data-block="2 · Value" data-title="Operações constroem o grafo">
+  <div class="eyebrow">Bloco 2 · Value</div>
+  <h2>Cada operação cria um nó e aponta para os pais</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py># versão simplificada: o _backward entra no Bloco 4
+def __add__(self, other):
+    out = Value(self.data + other.data, (self, other), '+')
+    return out
+
+def __mul__(self, other):
+    out = Value(self.data * other.data, (self, other), '*')
+    return out</pre>
+<pre class="code sm" data-py>a = Value(2.0);  b = Value(-3.0);  c = Value(10.0)
+e = a*b              # -6.0
+d = e + c            #  4.0
+f = Value(-2.0)
+L = d * f            # Value(data=-8.0)</pre>
+    </div>
+    <div class="stack">
+      <p>Quando você escreve <code class="i">a*b</code>, o Python chama <code class="i">a.__mul__(b)</code>. A chamada devolve um nó novo que guarda o resultado e aponta para <code class="i">a</code> e <code class="i">b</code>.</p>
+      <p>Encadeando as contas, <code class="i">L</code> termina conhecendo a árvore inteira que o produziu. Esse é o <b>forward</b>.</p>
+      <div class="box key"><div class="tag">Por que isso importa</div><p>Sem essa memória não existe backward: para propagar o gradiente para trás, cada nó precisa saber quem são seus pais.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="2 · Value" data-title="O grafo do forward">
+  <div class="eyebrow">Bloco 2 · Value</div>
+  <h2>O grafo de L = (a·b + c)·f</h2>
+  <figure><svg id="graphL1" viewBox="0 0 1000 340" role="img" aria-label="Grafo computacional de L com os valores do forward"></svg>
+    <figcaption>É o que a função <code class="i">draw_dot</code> do notebook desenha com o graphviz: cada caixa mostra o rótulo, o <b>data</b> e o <b>grad</b>. Os círculos são as operações. Por enquanto todo grad vale zero, porque ninguém rodou o backward ainda.</figcaption></figure>
+</section>
+
+<!-- =================================================================== BLOCO 3 -->
+<section class="slide divider" data-block="3 · Backprop à mão" data-title="Bloco 3">
+  <div class="bn">Bloco 3 de 5</div>
+  <h2>Backprop à mão</h2>
+  <p>Queremos saber quanto L muda quando cada nó muda. Começamos pelo fim e andamos para trás.</p>
+</section>
+
+<section class="slide" data-block="3 · Backprop à mão" data-title="Começar pelo fim">
+  <div class="eyebrow">Bloco 3 · Backprop à mão</div>
+  <h2>O primeiro gradiente é de graça</h2>
+  <div class="cols">
+    <div class="stack">
+      <p class="lead">Quanto L muda se L mudar? Exatamente o mesmo tanto. Então <span class="num">dL/dL = 1</span>. Essa é a semente de todo backward.</p>
+      <p>Um passo para trás: <span class="num">L = d · f</span>. Na multiplicação, a derivada em relação a um fator é <b>o outro fator</b>.</p>
+    </div>
+    <div class="stack">
+      <div class="eq">
+        dL/dL = <b>1</b><br>
+        dL/dd = f = <b>−2</b><br>
+        dL/df = d = <b>4</b>
+      </div>
+      <div class="box key"><div class="tag">Regra local da multiplicação</div><p>Se <span class="num">out = x · y</span>, então <span class="num">dout/dx = y</span> e <span class="num">dout/dy = x</span>. O valor de um lado vira o gradiente do outro.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Backprop à mão" data-title="Regra da cadeia">
+  <div class="eyebrow">Bloco 3 · Backprop à mão</div>
+  <h2>A regra da cadeia faz o resto</h2>
+  <div class="cols" style="flex:none; gap:36px; margin-bottom:6px">
+    <div class="stack">
+      <div class="eq" style="font-size:16.5px; line-height:1.75">
+        dL/dc = dL/dd · dd/dc = −2 · 1 = <b>−2</b><br>
+        dL/de = dL/dd · dd/de = −2 · 1 = <b>−2</b><br>
+        dL/da = dL/de · de/da = −2 · (−3) = <b>6</b><br>
+        dL/db = dL/de · de/db = −2 · 2 = <b>−4</b>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">O padrão</div><p><b>gradiente que chega × derivada local</b>. A soma tem derivada local 1, então só repassa. A multiplicação troca os valores de lado.</p></div>
+      <button class="reveal-btn" style="margin-top:0" data-reveal="graphL2">Calcule antes e depois mostre os gradientes</button>
+    </div>
+  </div>
+  <figure style="max-width:780px; align-self:center; width:100%"><svg id="graphL2" viewBox="0 0 1000 340" role="img" aria-label="Grafo de L com os gradientes"></svg></figure>
+</section>
+
+<section class="slide" data-block="3 · Backprop à mão" data-title="Conferir com a conta numérica">
+  <div class="eyebrow">Bloco 3 · Backprop à mão</div>
+  <h2>Sempre confira com a conta numérica</h2>
+  <div class="cols">
+<pre class="code" data-py># o mesmo grafo, duas vezes,
+# a segunda com b empurrado por h
+h = 0.001
+L1 = ((2.0 * -3.0) + 10.0) * -2.0
+L2 = ((2.0 * (-3.0 + h)) + 10.0) * -2.0
+
+(L2 - L1) / h     # ≈ -4.0  ✓ bate com dL/db</pre>
+    <div class="stack">
+      <p>No notebook isso é a função <code class="i">lol()</code>: monta o grafo duas vezes, mexe um único valor e mede.</p>
+      <p>O gradiente analítico (regra da cadeia) é rápido. O numérico é lento, mas impossível de errar. Usar um para auditar o outro se chama <b>gradient check</b>.</p>
+      <div class="box okb"><div class="tag">Hábito para a vida</div><p>Escreveu um backward novo? Confira dois ou três gradientes numericamente antes de confiar nele.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Backprop à mão" data-title="Um passo na direção do gradiente">
+  <div class="eyebrow">Bloco 3 · Backprop à mão</div>
+  <h2>Um passo na direção do gradiente</h2>
+  <div class="cols">
+<pre class="code" data-py>for v in (a, b, c, f):      # as folhas
+    v.data += 0.01 * v.grad
+
+# refaz o forward
+L = (a*b + c) * f
+# L: -8.0  →  -7.2865</pre>
+    <div class="stack">
+      <p>O gradiente aponta para onde L <b>sobe</b>. Andando um pouquinho a favor dele, L sai de <span class="num">−8</span> para <span class="num">−7,2865</span>.</p>
+      <p>Treinar uma rede é o mesmo movimento com o sinal trocado: andar <b>contra</b> o gradiente para a loss <b>descer</b>.</p>
+      <div class="box key"><div class="tag">Repare</div><p>Só se mexe nas folhas (a, b, c, f). Os nós do meio, como e e d, são recalculados pelo forward.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 4 -->
+<section class="slide divider" data-block="4 · Backprop automático" data-title="Bloco 4">
+  <div class="bn">Bloco 4 de 5</div>
+  <h2>Backprop automático</h2>
+  <p>Primeiro um neurônio, feito à mão. Depois, a mesma conta sem mão nenhuma.</p>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Um neurônio">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>Um neurônio: soma ponderada e tanh</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py>x1, x2 = Value(2.0), Value(0.0)      # entradas
+w1, w2 = Value(-3.0), Value(1.0)     # pesos
+b = Value(6.8813735870195432)        # viés
+
+n = x1*w1 + x2*w2 + b    # 0.8814
+o = n.tanh()             # 0.7071</pre>
+      <p class="small">O viés tem esse valor estranho de propósito: ele faz <span class="num">n = 0,8814</span>, e aí <span class="num">o = tanh(n) = 0,7071</span>. Com esses números, as contas do backprop dão valores redondos.</p>
+    </div>
+    <figure><svg id="chartTanh" viewBox="0 0 520 330" role="img" aria-label="Curva da tangente hiperbólica"></svg>
+      <figcaption>A tanh achata qualquer valor para o intervalo entre −1 e 1. Perto de zero ela é quase uma reta; longe, satura.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Backprop no neurônio">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>Backprop no neurônio</h2>
+  <figure><svg id="graphN" viewBox="0 0 1130 350" role="img" aria-label="Grafo do neurônio com valores e gradientes"></svg></figure>
+  <div style="display:flex; gap:28px; align-items:center; margin-top:8px">
+    <button class="reveal-btn" style="margin:0" data-reveal="graphN">Mostrar os gradientes</button>
+    <p class="small muted" style="margin:0">Derivada local da tanh: <span class="num">1 − o² = 1 − 0,7071² = 0,5</span>. Daí para trás é só soma (repassa) e multiplicação (troca).</p>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Lendo os gradientes">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>O que os gradientes estão dizendo</h2>
+  <div class="cols wide-right">
+    <table class="t">
+      <thead><tr><th>Nó</th><th>grad</th><th>Conta</th></tr></thead>
+      <tbody>
+        <tr><td class="num">n, b</td><td class="num">0,5</td><td class="num">1 − o²</td></tr>
+        <tr><td class="num">x1</td><td class="num">−1,5</td><td class="num">w1 · 0,5</td></tr>
+        <tr><td class="num">w1</td><td class="num">1,0</td><td class="num">x1 · 0,5</td></tr>
+        <tr><td class="num">x2</td><td class="num">0,5</td><td class="num">w2 · 0,5</td></tr>
+        <tr class="hl"><td class="num">w2</td><td class="num">0,0</td><td class="num">x2 · 0,5</td></tr>
+      </tbody>
+    </table>
+    <div class="stack">
+      <div class="box key"><div class="tag">w2.grad = 0</div><p>Porque <span class="num">x2 = 0</span>. Se a entrada é zero, mexer no peso dela não muda nada na saída. O gradiente diz isso sozinho.</p></div>
+      <div class="box key"><div class="tag">w1.grad = 1</div><p>Aumentar w1 aumenta a saída, uma unidade por unidade. É com essa informação que o treino decide para onde mexer cada peso.</p></div>
+      <p class="small muted">Numa rede de verdade, o que importa são os gradientes dos <b>pesos</b>: as entradas são dados, não se treinam.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Cada operação guarda sua regra">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>Cada operação guarda a sua própria regra</h2>
+  <div class="cols wide-left">
+    <div class="stack">
+<pre class="code sm" data-py>def __mul__(self, other):
+    out = Value(self.data * other.data, (self, other), '*')
+
+    def _backward():
+        self.grad  += other.data * out.grad
+        other.grad += self.data  * out.grad
+    out._backward = _backward
+
+    return out
+
+def tanh(self):
+    t = math.tanh(self.data)        # no notebook: fórmula com exp
+    out = Value(t, (self,), 'tanh')
+
+    def _backward():
+        self.grad += (1 - t**2) * out.grad
+    out._backward = _backward
+
+    return out</pre>
+    </div>
+    <div class="stack">
+      <p>A função interna <code class="i">_backward</code> é uma <b>closure</b>: ela lembra de <code class="i">self</code>, <code class="i">other</code> e <code class="i">out</code> mesmo depois que <code class="i">__mul__</code> terminou.</p>
+      <p>Quando chamada, empurra o gradiente de <code class="i">out</code> para os pais. Cada linha é a regra da cadeia inteira: <b>derivada local × gradiente que chegou</b>.</p>
+      <div class="box key"><div class="tag">Divisão de trabalho</div><p>Nenhum nó conhece o grafo todo. Cada operação só sabe a sua derivada local, e isso basta.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Ordem topológica">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>Em que ordem chamar os _backward</h2>
+  <div class="cols">
+<pre class="code" data-py>topo = []
+visited = set()
+def build_topo(v):
+    if v not in visited:
+        visited.add(v)
+        for child in v._prev:
+            build_topo(child)
+        topo.append(v)    # só entra depois dos filhos
+
+build_topo(L)</pre>
+    <div class="stack">
+      <p>Um nó só pode empurrar o gradiente para trás depois de ter recebido <b>tudo</b> o que vai receber. A ordem topológica coloca cada nó depois de todos os que o geraram. Invertida, ela dá a ordem certa para o backward.</p>
+      <div class="eq" style="font-size:16px">
+        <span class="r">uma ordem válida</span><br>a, b, e, c, d, f, L<br>
+        <span class="r">invertida, para o backward</span><br><b>L, f, d, c, e, b, a</b>
+      </div>
+      <p class="small muted">"Uma" ordem porque <code class="i">_prev</code> é um set: a ordem entre irmãos pode variar, e não faz diferença.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="backward() completo">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>backward(): ordenar, semear, varrer</h2>
+  <div class="cols wide-left">
+<pre class="code" data-py>def backward(self):
+    topo, visited = [], set()
+    def build_topo(v):
+        if v not in visited:
+            visited.add(v)
+            for child in v._prev:
+                build_topo(child)
+            topo.append(v)
+    build_topo(self)              # 1. ordenar
+
+    self.grad = 1.0               # 2. semear: dL/dL = 1
+    for node in reversed(topo):   # 3. varrer do fim ao começo
+        node._backward()</pre>
+    <div class="stack">
+      <p class="lead">É o método que você chama em <code class="i">loss.backward()</code>.</p>
+      <ul class="clean">
+        <li><b>Ordenar</b> garante que ninguém propaga antes da hora.</li>
+        <li><b>Semear</b> com 1 dá o ponto de partida da regra da cadeia.</li>
+        <li><b>Varrer</b> chama a regra local de cada nó, uma vez.</li>
+      </ul>
+      <p class="small muted">As folhas, como pesos e entradas, têm o <code class="i">_backward</code> padrão, que não faz nada: não há ninguém antes delas.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Backprop automático" data-title="Armadilha: = em vez de +=">
+  <div class="eyebrow">Bloco 4 · Backprop automático</div>
+  <h2>A armadilha do = no lugar de +=</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code" data-py>a = Value(3.0)
+b = a + a
+b.backward()
+a.grad   # 2.0 com +=  ·  1.0 com =</pre>
+<pre class="code sm" data-py>a, b = Value(-2.0), Value(3.0)
+d = a * b
+e = a + b
+f = d * e
+f.backward()
+a.grad, b.grad   # (-3.0, -8.0)</pre>
+    </div>
+    <div class="stack">
+      <p>Quando um nó é usado mais de uma vez, o gradiente chega por <b>mais de um caminho</b>, e as contribuições precisam ser somadas. Com <code class="i">=</code>, o último caminho apaga os anteriores.</p>
+      <p>No segundo exemplo, <code class="i">a</code> e <code class="i">b</code> entram em <code class="i">d</code> e em <code class="i">e</code>. Para <code class="i">a</code>: <span class="num">e·b + d·1 = 1·3 + (−6) = −3</span>.</p>
+      <div class="box trap"><div class="tag">Acontece com todo mundo</div><p>O próprio notebook tem um comentário admitindo esse bug no <code class="i">exp()</code> usado no vídeo, corrigido depois.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 5 -->
+<section class="slide divider" data-block="5 · Rede neural" data-title="Bloco 5">
+  <div class="bn">Bloco 5 de 5</div>
+  <h2>De uma conta a uma rede</h2>
+  <p>Completar a álgebra, conferir com o PyTorch e empilhar neurônios até virar algo que aprende.</p>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Completando a álgebra">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>Completando a álgebra com o mínimo de regras</h2>
+  <div class="cols wide-right">
+    <div class="stack">
+      <p>Só algumas operações precisam de derivada própria. O resto é composição das que já existem, e o backward vem de graça.</p>
+      <div class="box key"><div class="tag">Detalhe do __add__ e __mul__</div><p>Agora eles aceitam número solto: <code class="i">other = other if isinstance(other, Value) else Value(other)</code>. Isso permite escrever <code class="i">a + 1</code>.</p></div>
+    </div>
+    <table class="t">
+      <thead><tr><th>Você escreve</th><th>Vira</th><th>Derivada local</th></tr></thead>
+      <tbody>
+        <tr><td class="num">a ** k</td><td>operação nova</td><td class="num">k · a<sup>k−1</sup></td></tr>
+        <tr><td class="num">a.exp()</td><td>operação nova</td><td class="num">eᵃ (o próprio out)</td></tr>
+        <tr><td class="num">2 * a</td><td class="num">__rmul__ → a * 2</td><td>reaproveita *</td></tr>
+        <tr><td class="num">1 + a</td><td class="num">__radd__ → a + 1</td><td>reaproveita +</td></tr>
+        <tr><td class="num">-a</td><td class="num">a * -1</td><td>reaproveita *</td></tr>
+        <tr><td class="num">a - b</td><td class="num">a + (-b)</td><td>reaproveita + e −</td></tr>
+        <tr><td class="num">a / b</td><td class="num">a * b**-1</td><td>reaproveita * e **</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Mesma conta, outra granularidade">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>A tanh por extenso dá os mesmos gradientes</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code" data-py>n = x1*w1 + x2*w2 + b
+# ----
+e = (2*n).exp()
+o = (e - 1) / (e + 1)   # tanh, por extenso
+# ----
+o.backward()</pre>
+      <table class="t">
+        <thead><tr><th></th><th>x1</th><th>w1</th><th>x2</th><th>w2</th></tr></thead>
+        <tbody>
+          <tr><td>tanh como bloco</td><td class="num">−1,5</td><td class="num">1,0</td><td class="num">0,5</td><td class="num">0,0</td></tr>
+          <tr><td>tanh por extenso</td><td class="num">−1,5</td><td class="num">1,0</td><td class="num">0,5</td><td class="num">0,0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stack">
+      <p>O grafo ficou maior, com exp, soma, subtração e divisão no lugar de um único nó tanh, mas os gradientes são idênticos.</p>
+      <div class="box key"><div class="tag">A ideia</div><p>O nível de detalhe de um nó é escolha sua. Pode quebrar uma função em pedaços ou tratá-la como um bloco só, desde que saiba a derivada local do bloco.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Conferindo com o PyTorch">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>O mesmo neurônio no PyTorch</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>import torch
+
+x1 = torch.Tensor([2.0]).double();  x1.requires_grad = True
+x2 = torch.Tensor([0.0]).double();  x2.requires_grad = True
+w1 = torch.Tensor([-3.0]).double(); w1.requires_grad = True
+w2 = torch.Tensor([1.0]).double();  w2.requires_grad = True
+b  = torch.Tensor([6.8813735870195432]).double(); b.requires_grad = True
+
+n = x1*w1 + x2*w2 + b
+o = torch.tanh(n)
+o.backward()
+
+x1.grad.item(), w1.grad.item()   # (-1.5, 1.0)
+x2.grad.item(), w2.grad.item()   # (0.5, 0.0)</pre>
+    <div class="stack">
+      <p>Os mesmos números do micrograd. A API também é quase a mesma: <code class="i">.data</code>, <code class="i">.grad</code>, <code class="i">.backward()</code>.</p>
+      <ul class="clean">
+        <li><b>requires_grad</b>: o PyTorch só rastreia o grafo de quem pede.</li>
+        <li><b>.double()</b>: float64, para bater com o float do Python.</li>
+      </ul>
+      <div class="box key"><div class="tag">A diferença real</div><p>O micrograd trabalha com escalares. O PyTorch faz a mesma conta com tensores, milhões de escalares por vez e em GPU. A matemática do backward é igual.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Neuron, Layer, MLP">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>Neuron → Layer → MLP</h2>
+  <div class="cols wide-left" style="gap:32px">
+<pre class="code sm" style="font-size:13px" data-py>class Neuron:
+    def __init__(self, nin):
+        self.w = [Value(random.uniform(-1,1)) for _ in range(nin)]
+        self.b = Value(random.uniform(-1,1))
+    def __call__(self, x):
+        act = sum((wi*xi for wi, xi in zip(self.w, x)), self.b)
+        return act.tanh()
+
+class Layer:      # uma lista de neurônios lado a lado
+    def __init__(self, nin, nout):
+        self.neurons = [Neuron(nin) for _ in range(nout)]
+
+class MLP:        # uma lista de camadas em sequência
+    def __init__(self, nin, nouts):
+        sz = [nin] + nouts
+        self.layers = [Layer(sz[i], sz[i+1])
+                       for i in range(len(nouts))]
+
+n = MLP(3, [4, 4, 1])</pre>
+    <div class="stack">
+      <figure><svg id="mlp" viewBox="0 0 520 300" role="img" aria-label="Rede MLP com 3 entradas, duas camadas de 4 neurônios e 1 saída"></svg></figure>
+      <p class="small">Cada classe também tem um método <code class="i">parameters()</code> que junta os pesos e vieses das peças de dentro. É por ele que o loop de treino alcança os 41 números treináveis.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Dados e loss">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>Dados, previsão e loss</h2>
+  <div class="cols">
+<pre class="code" data-py>xs = [
+    [2.0, 3.0, -1.0],
+    [3.0, -1.0, 0.5],
+    [0.5, 1.0, 1.0],
+    [1.0, 1.0, -1.0],
+]
+ys = [1.0, -1.0, -1.0, 1.0]   # alvos
+
+ypred = [n(x) for x in xs]
+loss = sum((yout - ygt)**2
+           for ygt, yout in zip(ys, ypred))</pre>
+    <div class="stack">
+      <p>Quatro exemplos de 3 números cada, com alvo +1 ou −1: um classificador binário em miniatura.</p>
+      <p>A <b>loss</b> é a soma dos erros ao quadrado. É um número só que diz o quanto a rede está errando: zero seria perfeição.</p>
+      <div class="box key"><div class="tag">Ligue os pontos</div><p>A loss é o <span class="num">L</span> do Bloco 3. Antes eram 4 folhas, agora são 41 parâmetros, mas o <code class="i">loss.backward()</code> é exatamente o mesmo.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="O loop de treino">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>O loop de treino em quatro tempos</h2>
+  <div class="cols wide-left">
+<pre class="code" data-py>for k in range(20):
+    # 1. forward
+    ypred = [n(x) for x in xs]
+    loss = sum((yout - ygt)**2
+               for ygt, yout in zip(ys, ypred))
+
+    # 2. zerar os gradientes
+    for p in n.parameters():
+        p.grad = 0.0
+
+    # 3. backward
+    loss.backward()
+
+    # 4. passo contra o gradiente
+    for p in n.parameters():
+        p.data += -0.1 * p.grad</pre>
+    <div class="stack">
+      <ul class="clean">
+        <li><b>Forward</b>: previsões e loss com os pesos atuais.</li>
+        <li><b>Zerar</b>: o <code class="i">+=</code> acumula; sem zerar, sobra gradiente da volta anterior.</li>
+        <li><b>Backward</b>: o gradiente da loss em cada um dos 41 parâmetros.</li>
+        <li><b>Passo</b>: o sinal é <b>menos</b> porque queremos a loss menor. <span class="num">0,1</span> é a taxa de aprendizado.</li>
+      </ul>
+      <div class="box key"><div class="tag">No PyTorch</div><p>Os mesmos quatro tempos: <code class="i">optimizer.zero_grad()</code>, <code class="i">loss.backward()</code>, <code class="i">optimizer.step()</code>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Uma execução real">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>Uma execução real: 6,01 → 0,018 em 20 passos</h2>
+  <div class="cols wide-left">
+    <figure><svg id="chartLoss" viewBox="0 0 620 360" role="img" aria-label="Curva de loss ao longo de 20 iterações"></svg>
+      <figcaption>Rodei o código do notebook com <code class="i">random.seed(1337)</code>. Com outra semente os números mudam; a forma da curva, não.</figcaption></figure>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Exemplo</th><th>Alvo</th><th>Previsão final</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">+1</td><td class="num">0,93</td></tr>
+          <tr><td class="num">2</td><td class="num">−1</td><td class="num">−0,99</td></tr>
+          <tr><td class="num">3</td><td class="num">−1</td><td class="num">−0,93</td></tr>
+          <tr><td class="num">4</td><td class="num">+1</td><td class="num">0,93</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">A queda forte entre os passos 4 e 7 é a rede "achando" a separação. Depois disso ela só refina.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Rede neural" data-title="Armadilha: esquecer de zerar">
+  <div class="eyebrow">Bloco 5 · Rede neural</div>
+  <h2>A armadilha de esquecer de zerar</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>Sem o passo 2, cada <code class="i">backward()</code> soma o gradiente novo em cima de todos os anteriores. O passo fica cada vez maior e o treino passa a pular.</p>
+      <div class="box trap"><div class="tag">O pior tipo de bug</div><p>Neste exemplo minúsculo, a versão sem zerar até termina com loss perto de zero. Mas ela chega lá aos trancos, com saltos de volta para cima. Numa rede de verdade, isso diverge. É um bug que às vezes parece funcionar.</p></div>
+    </div>
+    <table class="t">
+      <thead><tr><th>Passo</th><th>Com zero_grad</th><th>Sem zerar</th></tr></thead>
+      <tbody>
+        <tr><td class="num">5</td><td class="num">1,528</td><td class="num">0,0457</td></tr>
+        <tr><td class="num">7</td><td class="num">0,254</td><td class="num">0,0003</td></tr>
+        <tr class="hl"><td class="num">8</td><td class="num">0,135</td><td class="num">0,174 ↑</td></tr>
+        <tr><td class="num">11</td><td class="num">0,053</td><td class="num">0,0099</td></tr>
+        <tr class="hl"><td class="num">12</td><td class="num">0,044</td><td class="num">3,784 ↑</td></tr>
+        <tr><td class="num">20</td><td class="num">0,018</td><td class="num">0,0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =================================================================== FECHAMENTO -->
+<section class="slide" data-block="Fechamento" data-title="A aula em seis linhas">
+  <div class="eyebrow">Fechamento</div>
+  <h2>A aula em seis linhas</h2>
+  <ul class="clean" style="gap:16px">
+    <li><b>Derivada</b> é a sensibilidade da saída a um empurrãozinho na entrada.</li>
+    <li><b>Value</b> guarda o número, o gradiente e de onde veio. Encadear contas constrói o grafo.</li>
+    <li>Cada operação conhece <b>só a sua derivada local</b>: + repassa, × troca os valores de lado.</li>
+    <li><b>Regra da cadeia</b>: gradiente que chega × derivada local.</li>
+    <li><b>backward()</b>: ordem topológica invertida, semente 1 e <code class="i">+=</code> para somar caminhos.</li>
+    <li><b>Treinar</b>: forward, zerar, backward e passo contra o gradiente. Repetir.</li>
+  </ul>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 1">
+  <div class="eyebrow">Pare e responda · 1 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">1</span><span>Por que <code class="i">self.grad</code> começa em 0, mas o gradiente do nó final começa em 1?</span></div>
+      <button>ver resposta</button><div class="a">O <code class="i">grad</code> é um acumulador (<code class="i">+=</code>), então começa neutro. Já <span class="num">dL/dL = 1</span> por definição: é a semente da regra da cadeia.</div></div>
+    <div class="q"><div class="qt"><span class="qn">2</span><span>Em <code class="i">c = a + b</code>, se <code class="i">c.grad = 5</code>, quanto vale <code class="i">a.grad</code>?</span></div>
+      <button>ver resposta</button><div class="a"><span class="num">5</span>. A soma tem derivada local 1: só repassa o gradiente.</div></div>
+    <div class="q"><div class="qt"><span class="qn">3</span><span>Em <code class="i">c = a * b</code>, com <code class="i">a = 4</code>, <code class="i">b = −2</code> e <code class="i">c.grad = 3</code>: quanto valem <code class="i">a.grad</code> e <code class="i">b.grad</code>?</span></div>
+      <button>ver resposta</button><div class="a"><span class="num">a.grad = b · 3 = −6</span> e <span class="num">b.grad = a · 3 = 12</span>. O valor de um lado vira o gradiente do outro.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 2">
+  <div class="eyebrow">Pare e responda · 2 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">4</span><span>O que quebra se você trocar <code class="i">+=</code> por <code class="i">=</code> dentro do <code class="i">_backward</code>?</span></div>
+      <button>ver resposta</button><div class="a">Nós usados mais de uma vez perdem contribuições: só o último caminho conta. Em <code class="i">b = a + a</code>, <code class="i">a.grad</code> dá 1 em vez de 2.</div></div>
+    <div class="q"><div class="qt"><span class="qn">5</span><span>Por que o backward percorre os nós em ordem topológica <b>invertida</b>?</span></div>
+      <button>ver resposta</button><div class="a">Porque um nó só pode propagar depois de ter recebido todo o gradiente dos nós que dependem dele. A ordem invertida garante que todos esses já passaram.</div></div>
+    <div class="q"><div class="qt"><span class="qn">6</span><span>No loop de treino, por que o passo é <code class="i">−0.1 * p.grad</code> e não <code class="i">+0.1</code>? E por que zerar os gradientes antes do backward?</span></div>
+      <button>ver resposta</button><div class="a">O gradiente aponta para onde a loss sobe, e queremos que ela desça: por isso o menos. Sem zerar, o <code class="i">+=</code> soma os gradientes das voltas anteriores e o passo sai do tamanho errado.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Meta da semana S02">
+  <div class="eyebrow">Meta da semana S02</div>
+  <h2>Agora feche este arquivo e escreva o seu</h2>
+  <div class="cols">
+    <div class="stack">
+      <ul class="check">
+        <li>Reescrever o <code class="i">Value</code> com <code class="i">+</code>, <code class="i">*</code>, <code class="i">tanh</code> e <code class="i">backward()</code>, sem olhar este material nem o notebook.</li>
+        <li>Conferir três gradientes com a conta numérica.</li>
+        <li>Montar o neurônio e comparar os gradientes com o PyTorch.</li>
+        <li>Treinar o <code class="i">MLP(3, [4, 4, 1])</code> e ver a loss cair.</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <h3 style="margin:0">Para revisar com o Claude</h3>
+        <button class="copy" data-copy="promptReview">copiar</button>
+      </div>
+<pre class="code sm" id="promptReview" style="white-space:pre-wrap">Acabei de reescrever o micrograd sozinho. Vou colar meu código.
+
+Não corrija por mim. Quero que você:
+1. Aponte o que está errado, sem me dar a versão certa.
+2. Me faça 5 perguntas sobre por que cada _backward é como é.
+3. Me dê um caso de teste que quebraria se eu tivesse usado = no lugar de +=.
+
+Meu código:
+&lt;cole aqui&gt;</pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Créditos e licença">
+  <div class="eyebrow">Créditos</div>
+  <h2>De onde vem este material</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>O código é de <b>Andrej Karpathy</b>, do repositório <span class="num">karpathy/nn-zero-to-hero</span>, pasta <span class="num">lectures/micrograd</span>, que acompanha a primeira aula da série <i>Neural Networks: Zero to Hero</i>.</p>
+      <p class="small muted">Aqui os trechos foram encurtados e comentados em português, e os números foram conferidos rodando o código. Duas simplificações para caber nos slides: a <code class="i">tanh</code> usa <code class="i">math.tanh</code> em vez da fórmula com <code class="i">exp</code>, e as classes da rede aparecem sem todos os métodos.</p>
+    </div>
+    <div class="box" style="font-size:12.5px; line-height:1.5; color:var(--muted)">
+      <div class="tag" style="color:var(--muted)">MIT License</div>
+      <p style="font-size:12.5px">Copyright (c) 2022 Andrej Karpathy</p>
+      <p style="font-size:12px">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+      <p style="font-size:12px">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+      <p style="font-size:12px">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div class="nav">
+  <button id="btnIndex" title="Índice (I)">≡ índice</button>
+  <button id="btnPrev" title="Anterior (←)">←</button>
+  <span class="count" id="count"></span>
+  <button id="btnNext" title="Próximo (→)">→</button>
+</div>
+<aside class="index" id="index" aria-label="Índice dos slides"></aside>
+
+<script>
+/* ---------- syntax highlight (Python, mínimo) ---------- */
+const KW = new Set("def class return for in if else elif not and or lambda import from as while with assert is None True False pass".split(" "));
+const BI = new Set("print range len sum zip set isinstance super".split(" "));
+function esc(s){ return s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function highlight(src){
+  const re = /(#[^\n]*)|(f?'(?:[^'\\\n]|\\.)*'|f?"(?:[^"\\\n]|\\.)*")|(\b\d+(?:\.\d+)?(?:e-?\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+  let out = "", m;
+  while ((m = re.exec(src))){
+    if (m[1]) out += `<span class="c">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="s">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="n">${m[3]}</span>`;
+    else if (m[4]){
+      const w = m[4];
+      if (KW.has(w)) out += `<span class="k">${w}</span>`;
+      else if (w === "self") out += `<span class="self">${w}</span>`;
+      else if (BI.has(w) || /^__\w+__$/.test(w)) out += `<span class="f">${w}</span>`;
+      else out += w;
+    } else out += esc(m[5]);
+  }
+  return out;
+}
+document.querySelectorAll("pre[data-py]").forEach(p => { p.innerHTML = highlight(p.textContent); });
+
+/* ---------- svg helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const br = n => {
+  let s = (Math.abs(n) < 1e-12 ? 0 : n).toFixed(4).replace(/0+$/, "");
+  if (s.endsWith(".")) s += "0";
+  return s.replace(".", ",").replace("-", "−");
+};
+const fmt = (n, d) => n.toFixed(d).replace(".", ",").replace("-", "−");
+
+/* ---------- computational graph ---------- */
+function drawGraph(svgId, spec){
+  const svg = document.getElementById(svgId);
+  const W = 150, H = 62;
+  const defs = el("defs", {}, svg);
+  const mk = el("marker", {id: svgId+"-arr", viewBox:"0 0 10 10", refX:"9", refY:"5", markerWidth:"7", markerHeight:"7", orient:"auto-start-reverse"}, defs);
+  el("path", {d:"M0,0 L10,5 L0,10 z", fill:"var(--line-2)"}, mk);
+  const edge = (x1,y1,x2,y2) => {
+    const mx = (x1+x2)/2;
+    el("path", {d:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`, fill:"none", stroke:"var(--line-2)", "stroke-width":"1.6", "marker-end":`url(#${svgId}-arr)`}, svg);
+  };
+  // edges first
+  spec.ops.forEach(op => {
+    op.ins.forEach(id => { const n = spec.nodes[id]; edge(n.x+W, n.y+H/2, op.x-15, op.y); });
+    const o = spec.nodes[op.out]; edge(op.x+15, op.y, o.x, o.y+H/2);
+  });
+  spec.ops.forEach(op => {
+    el("circle", {cx:op.x, cy:op.y, r:15, fill:"var(--acc-soft)", stroke:"var(--acc)", "stroke-width":"1.4"}, svg);
+    el("text", {x:op.x, y:op.y+(op.sym.length>2?4:5), "text-anchor":"middle", "font-family":"var(--mono)", "font-size":op.sym.length>2?"10":"15", fill:"var(--acc)", "font-weight":"600"}, svg, op.sym);
+  });
+  Object.entries(spec.nodes).forEach(([id, n]) => {
+    const g = el("g", {}, svg);
+    el("rect", {x:n.x, y:n.y, width:W, height:H, rx:8, fill:"var(--paper)", stroke: n.out ? "var(--ink)" : "var(--line-2)", "stroke-width": n.out ? "1.6" : "1.2"}, g);
+    el("line", {x1:n.x, y1:n.y+24, x2:n.x+W, y2:n.y+24, stroke:"var(--line)"}, g);
+    el("text", {x:n.x+10, y:n.y+17, "font-family":"var(--mono)", "font-size":"13.5", "font-weight":"600", fill:"var(--ink)"}, g, n.label);
+    el("text", {x:n.x+10, y:n.y+41, "font-family":"var(--mono)", "font-size":"12.5", fill:"var(--muted)"}, g, "data");
+    el("text", {x:n.x+W-10, y:n.y+41, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12.5", fill:"var(--ink)"}, g, br(n.data));
+    el("text", {x:n.x+10, y:n.y+56, "font-family":"var(--mono)", "font-size":"12.5", fill:"var(--muted)"}, g, "grad");
+    if (spec.showGrad === "zero"){
+      el("text", {x:n.x+W-10, y:n.y+56, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12.5", fill:"var(--faint)"}, g, "0,0");
+    } else {
+      el("text", {class:"gq", x:n.x+W-10, y:n.y+56, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12.5"}, g, "?");
+      el("text", {class:"gval", x:n.x+W-10, y:n.y+56, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12.5", "font-weight":"600", fill:"var(--acc)"}, g, br(n.grad));
+    }
+  });
+}
+const L_SPEC = {
+  nodes:{
+    a:{label:"a", x:10,  y:20,  data:2,   grad:6},
+    b:{label:"b", x:10,  y:110, data:-3,  grad:-4},
+    e:{label:"e", x:250, y:65,  data:-6,  grad:-2},
+    c:{label:"c", x:250, y:175, data:10,  grad:-2},
+    d:{label:"d", x:490, y:120, data:4,   grad:-2},
+    f:{label:"f", x:490, y:230, data:-2,  grad:4},
+    L:{label:"L", x:830, y:175, data:-8,  grad:1, out:true}
+  },
+  ops:[
+    {sym:"×", x:205, y:96,  ins:["a","b"], out:"e"},
+    {sym:"+", x:445, y:151, ins:["e","c"], out:"d"},
+    {sym:"×", x:740, y:206, ins:["d","f"], out:"L"}
+  ]
+};
+drawGraph("graphL1", Object.assign({}, L_SPEC, {showGrad:"zero"}));
+drawGraph("graphL2", L_SPEC);
+
+const N_SPEC = {
+  nodes:{
+    x1:{label:"x1", x:5,   y:0,   data:2,  grad:-1.5},
+    w1:{label:"w1", x:5,   y:72,  data:-3, grad:1},
+    x2:{label:"x2", x:5,   y:200, data:0,  grad:0.5},
+    w2:{label:"w2", x:5,   y:272, data:1,  grad:0},
+    x1w1:{label:"x1·w1", x:225, y:36,  data:-6, grad:0.5},
+    x2w2:{label:"x2·w2", x:225, y:236, data:0,  grad:0.5},
+    s:{label:"soma", x:445, y:136, data:-6, grad:0.5},
+    b:{label:"b", x:445, y:258, data:6.8814, grad:0.5},
+    n:{label:"n", x:665, y:175, data:0.8814, grad:0.5},
+    o:{label:"o", x:960, y:175, data:0.7071, grad:1, out:true}
+  },
+  ops:[
+    {sym:"×", x:195, y:67,  ins:["x1","w1"], out:"x1w1"},
+    {sym:"×", x:195, y:267, ins:["x2","w2"], out:"x2w2"},
+    {sym:"+", x:415, y:167, ins:["x1w1","x2w2"], out:"s"},
+    {sym:"+", x:635, y:206, ins:["s","b"], out:"n"},
+    {sym:"tanh", x:880, y:206, ins:["n"], out:"o"}
+  ]
+};
+drawGraph("graphN", N_SPEC);
+
+document.querySelectorAll("[data-reveal]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const fig = document.getElementById(btn.dataset.reveal).closest("figure");
+    const on = fig.classList.toggle("shown");
+    btn.textContent = on ? "Esconder os gradientes" : (btn.dataset.reveal === "graphN" ? "Mostrar os gradientes" : "Calcule antes e depois mostre os gradientes");
+  });
+});
+
+/* ---------- charts drawn to scale ---------- */
+function chart(svgId, o){
+  const svg = document.getElementById(svgId);
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const m = {l:52, r:20, t:16, b:40};
+  const X = v => m.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (W - m.l - m.r);
+  const Y = v => H - m.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (H - m.t - m.b);
+  o.yt.forEach(t => {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(t), y2:Y(t), stroke:"var(--line)", "stroke-width":t===0&&o.zeroAxis?"1.4":"1"}, svg);
+    el("text", {x:m.l-10, y:Y(t)+4, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, fmt(t, o.yd||0));
+  });
+  o.xt.forEach(t => {
+    if (o.zeroAxis && t === 0) el("line", {x1:X(0), x2:X(0), y1:m.t, y2:H-m.b, stroke:"var(--line)", "stroke-width":"1.4"}, svg);
+    el("text", {x:X(t), y:H-m.b+20, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, o.xfmt ? o.xfmt(t) : fmt(t, 0));
+  });
+  if (o.xlabel) el("text", {x:W-m.r, y:H-4, "text-anchor":"end", "font-size":"12", fill:"var(--muted)", "font-family":"var(--sans)"}, svg, o.xlabel);
+  return {X, Y, svg};
+}
+function line(c, pts, attrs){
+  el("path", Object.assign({d:"M" + pts.map(p => c.X(p[0]).toFixed(1)+","+c.Y(p[1]).toFixed(1)).join(" L"), fill:"none", "stroke-linejoin":"round", "stroke-linecap":"round"}, attrs), c.svg);
+}
+function dot(c, x, y, r, fill){ el("circle", {cx:c.X(x), cy:c.Y(y), r, fill, stroke:"var(--paper)", "stroke-width":"2"}, c.svg); }
+function label(c, x, y, txt, dx, dy, anchor, col){
+  el("text", {x:c.X(x)+dx, y:c.Y(y)+dy, "text-anchor":anchor||"start", "font-family":"var(--sans)", "font-size":"13", "font-weight":"600", fill:col||"var(--ink)"}, c.svg, txt);
+}
+
+// parábola
+(() => {
+  const f = x => 3*x*x - 4*x + 5;
+  const c = chart("chartParabola", {x:[-1.5, 3.5], y:[0, 30], xt:[-1,0,1,2,3], yt:[0,10,20,30]});
+  const pts = []; for (let x = -1.5; x <= 3.5001; x += 0.05) pts.push([x, f(x)]);
+  line(c, pts, {stroke:"var(--acc)", "stroke-width":"3"});
+  line(c, [[2.25, 20 + 14*(2.25-3)], [3.5, 20 + 14*(0.5)]], {stroke:"var(--warn)", "stroke-width":"2", "stroke-dasharray":"6 5"});
+  line(c, [[-0.4, f(2/3)], [1.75, f(2/3)]], {stroke:"var(--ok)", "stroke-width":"2", "stroke-dasharray":"6 5"});
+  dot(c, 3, 20, 6, "var(--warn)"); dot(c, 2/3, f(2/3), 6, "var(--ok)");
+  label(c, 3, 20, "x = 3 · inclinação 14", -12, 4, "end", "var(--warn)");
+  label(c, 2/3, f(2/3), "x = 2/3 · inclinação 0", 0, 26, "middle", "var(--ok)");
+})();
+
+// tanh
+(() => {
+  const c = chart("chartTanh", {x:[-4, 4], y:[-1, 1], xt:[-4,-2,0,2,4], yt:[-1,0,1], zeroAxis:true});
+  const pts = []; for (let x = -4; x <= 4.0001; x += 0.05) pts.push([x, Math.tanh(x)]);
+  line(c, pts, {stroke:"var(--acc)", "stroke-width":"3"});
+  dot(c, 0.8814, 0.7071, 6, "var(--warn)");
+  label(c, 0.8814, 0.7071, "n = 0,8814 → o = 0,7071", 12, 18, "start", "var(--warn)");
+})();
+
+// loss
+(() => {
+  const losses = [6.0054,3.2021,2.4622,2.0881,1.5279,0.7001,0.2539,0.1348,0.0904,0.0673,0.0534,0.0440,0.0374,0.0324,0.0286,0.0255,0.0231,0.0210,0.0193,0.0178];
+  const c = chart("chartLoss", {x:[1, 20], y:[0, 6.5], xt:[1,5,10,15,20], yt:[0,2,4,6], xlabel:"passo de treino"});
+  const pts = losses.map((v,i) => [i+1, v]);
+  el("path", {d:"M" + c.X(1) + "," + c.Y(0) + " L" + pts.map(p => c.X(p[0]).toFixed(1)+","+c.Y(p[1]).toFixed(1)).join(" L") + " L" + c.X(20) + "," + c.Y(0) + " Z", fill:"var(--acc-soft)", stroke:"none"}, c.svg);
+  line(c, pts, {stroke:"var(--acc)", "stroke-width":"2.6"});
+  pts.forEach(p => el("circle", {cx:c.X(p[0]), cy:c.Y(p[1]), r:3, fill:"var(--acc)"}, c.svg));
+  dot(c, 1, losses[0], 6, "var(--acc)"); dot(c, 20, losses[19], 6, "var(--acc)");
+  label(c, 1, losses[0], "6,005", 12, 5, "start", "var(--acc)");
+  label(c, 20, losses[19], "0,018", 0, -14, "end", "var(--acc)");
+})();
+
+// MLP
+(() => {
+  const svg = document.getElementById("mlp");
+  const layers = [3, 4, 4, 1], xs = [50, 190, 330, 470], H = 250, top = 20;
+  const pos = layers.map((n, li) => Array.from({length:n}, (_, i) => [xs[li], top + (H/(n+1))*(i+1)]));
+  for (let li = 0; li < layers.length - 1; li++)
+    pos[li].forEach(a => pos[li+1].forEach(b => el("line", {x1:a[0], y1:a[1], x2:b[0], y2:b[1], stroke:"var(--line-2)", "stroke-width":"1"}, svg)));
+  pos.forEach((col, li) => col.forEach(p => el("circle", {cx:p[0], cy:p[1], r:13, fill: li===0 ? "var(--soft)" : "var(--acc-soft)", stroke: li===0 ? "var(--line-2)" : "var(--acc)", "stroke-width":"1.5"}, svg)));
+  const names = ["entrada · 3", "camada · 4", "camada · 4", "saída · 1"];
+  names.forEach((t, i) => el("text", {x:xs[i], y:top+H+22, "text-anchor":"middle", "font-size":"12.5", fill:"var(--muted)", "font-family":"var(--sans)"}, svg, t));
+  const params = ["3·4+4 = 16", "4·4+4 = 20", "4·1+1 = 5"];
+  params.forEach((t, i) => el("text", {x:(xs[i]+xs[i+1])/2, y:12, "text-anchor":"middle", "font-size":"12", fill:"var(--acc)", "font-family":"var(--mono)"}, svg, t));
+  el("text", {x:470, y:top+H/2-30, "text-anchor":"middle", "font-size":"13", "font-weight":"600", fill:"var(--ink)", "font-family":"var(--sans)"}, svg, "41 parâmetros");
+})();
+
+/* ---------- Q&A, copy ---------- */
+document.querySelectorAll(".q button").forEach(b => b.addEventListener("click", () => b.closest(".q").classList.add("open")));
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+  const txt = document.getElementById(b.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(txt); b.textContent = "copiado"; } catch(e) { b.textContent = "selecione e copie"; }
+  setTimeout(() => b.textContent = "copiar", 1600);
+}));
+
+/* ---------- navigation ---------- */
+const slides = [...document.querySelectorAll(".slide")];
+const KEY = "aula01-micrograd-slide";
+let cur = 0;
+slides.forEach((s, i) => {
+  const f = document.createElement("div"); f.className = "foot";
+  f.innerHTML = `<span>micrograd por dentro · ${s.dataset.block}</span><span>${String(i+1).padStart(2,"0")} / ${slides.length}</span>`;
+  s.appendChild(f);
+});
+function show(i){
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("on", k === cur));
+  document.getElementById("progress").style.width = ((cur+1) / slides.length * 100) + "%";
+  document.getElementById("count").textContent = (cur+1) + " / " + slides.length;
+  try { localStorage.setItem(KEY, String(cur)); } catch(e) {}
+  history.replaceState(null, "", "#" + (cur+1));
+  document.querySelectorAll(".index a").forEach((a, k) => a.classList.toggle("cur", k === cur));
+}
+function fit(){
+  const k = Math.min(window.innerWidth / 1340, (window.innerHeight - 50) / 760);
+  document.getElementById("deck").style.transform = `scale(${Math.max(0.3, k)})`;
+}
+// index
+const idx = document.getElementById("index");
+let html = `<h4>Índice</h4><div class="hint">Clique para ir · <b>I</b> ou <b>Esc</b> fecha</div>`, lastBlock = "";
+slides.forEach((s, i) => {
+  if (s.dataset.block !== lastBlock){ lastBlock = s.dataset.block; html += `<div class="grp">${lastBlock}</div>`; }
+  html += `<a data-go="${i}"><span>${String(i+1).padStart(2,"0")}</span>${s.dataset.title}</a>`;
+});
+idx.innerHTML = html;
+idx.addEventListener("click", e => { const a = e.target.closest("[data-go]"); if (a){ show(+a.dataset.go); idx.classList.remove("open"); } });
+const toggleIndex = () => idx.classList.toggle("open");
+document.getElementById("btnIndex").onclick = toggleIndex;
+document.getElementById("btnPrev").onclick = () => show(cur - 1);
+document.getElementById("btnNext").onclick = () => show(cur + 1);
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("textarea, input")) return;
+  if (["ArrowRight","PageDown"," "].includes(e.key)){ e.preventDefault(); show(cur + 1); }
+  else if (["ArrowLeft","PageUp"].includes(e.key)){ e.preventDefault(); show(cur - 1); }
+  else if (e.key === "Home") show(0);
+  else if (e.key === "End") show(slides.length - 1);
+  else if (e.key === "i" || e.key === "I") toggleIndex();
+  else if (e.key === "Escape") idx.classList.remove("open");
+});
+window.addEventListener("resize", fit);
+fit();
+let start = 0;
+const h = parseInt(location.hash.slice(1), 10);
+if (h) start = h - 1;
+else { try { start = parseInt(localStorage.getItem(KEY) || "0", 10) || 0; } catch(e) {} }
+show(start);
+</script>
+</body>
+</html>

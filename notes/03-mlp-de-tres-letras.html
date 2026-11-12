@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLP de três letras</title>
+<!--
+  Aula 03 · makemore parte 2 (MLP) — material de estudo pessoal.
+  Trechos de código adaptados de Andrej Karpathy, nn-zero-to-hero (lectures/makemore) e makemore (names.txt).
+  MIT License · Copyright (c) 2022 Andrej Karpathy — texto completo da licença no último slide.
+-->
+<style>
+
+
+
+
+
+
+
+
+
+
+
+:root{
+  --bg:#E9ECF1; --paper:#FFFFFF; --soft:#F4F6F9; --sunk:#E5E9EF;
+  --line:#D7DCE3; --line-2:#B9C1CC;
+  --ink:#12161C; --muted:#5B6573; --faint:#8A94A2;
+  --acc:#4652C9; --acc-soft:#E8EAFB;
+  --warn:#BE3A5A; --warn-soft:#FBE8ED;
+  --ok:#2F7A47; --ok-soft:#E1F1E6;
+  --gold:#A86F08;
+  --code-bg:#151A22; --code-ink:#DCE2EA; --code-dim:#7D8899;
+  --k:#9CA6FF; --s:#8FD6A8; --n:#F2B866; --c:#7D8899; --f:#7FD3E6; --self:#F29BB0;
+  --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+    --line:#252C37; --line-2:#3A4452;
+    --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+    --acc:#8F98F5; --acc-soft:#1D2147;
+    --warn:#F07A96; --warn-soft:#3A1A23;
+    --ok:#62C283; --ok-soft:#15291C;
+    --gold:#E5B04A;
+    --code-bg:#0B0E13;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+  --line:#252C37; --line-2:#3A4452;
+  --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+  --acc:#8F98F5; --acc-soft:#1D2147;
+  --warn:#F07A96; --warn-soft:#3A1A23;
+  --ok:#62C283; --ok-soft:#15291C;
+  --gold:#E5B04A;
+  --code-bg:#0B0E13;
+}
+*{box-sizing:border-box}
+html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; overflow:hidden}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:4px}
+
+/* ------- stage ------- */
+.viewport{position:fixed; inset:0; display:grid; place-items:center}
+.deck{position:relative; width:1280px; height:720px; transform-origin:center center; flex:none}
+.slide{position:absolute; inset:0; background:var(--paper); border-radius:14px; box-shadow:0 2px 4px rgba(0,0,0,.05), 0 30px 60px -30px rgba(0,0,0,.35);
+  padding:56px 76px 64px; display:none; flex-direction:column; overflow:hidden}
+.slide.on{display:flex}
+.progress{position:absolute; left:0; top:0; height:4px; background:var(--acc); border-radius:14px 0 0 0; transition:width .25s ease; z-index:5}
+.eyebrow{font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--acc); margin-bottom:10px}
+h1,h2,h3{font-family:var(--serif); margin:0; text-wrap:balance; letter-spacing:-.01em}
+h2{font-weight:600; font-size:38px; line-height:1.12; margin-bottom:24px}
+h3{font-weight:600; font-size:20px; margin-bottom:10px}
+p{margin:0 0 14px; font-size:19px; line-height:1.55; max-width:62ch}
+p.lead{font-size:21px; color:var(--ink)}
+.muted{color:var(--muted)}
+.small{font-size:15.5px; line-height:1.55}
+ul.clean{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+ul.clean li{font-size:18px; line-height:1.5; padding-left:22px; position:relative}
+ul.clean li::before{content:""; position:absolute; left:2px; top:.62em; width:8px; height:8px; border-radius:2px; background:var(--acc)}
+.foot{position:absolute; left:76px; right:76px; bottom:22px; display:flex; justify-content:space-between; font-size:12.5px; color:var(--faint); font-family:var(--mono)}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:44px; align-items:start; flex:1; min-height:0}
+.cols.wide-left{grid-template-columns:1.15fr .85fr}
+.cols.wide-right{grid-template-columns:.85fr 1.15fr}
+.stack{display:flex; flex-direction:column; gap:18px; min-width:0}
+code.i{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:1px 6px; border-radius:4px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* code */
+pre.code{margin:0; background:var(--code-bg); color:var(--code-ink); border-radius:10px; padding:18px 20px; font-family:var(--mono); font-size:15.5px; line-height:1.62; overflow:auto; white-space:pre; tab-size:4}
+pre.code.sm{font-size:14px; line-height:1.55; padding:16px 18px}
+pre.code .k{color:var(--k)} pre.code .s{color:var(--s)} pre.code .n{color:var(--n)}
+pre.code .c{color:var(--c); font-style:italic} pre.code .f{color:var(--f)} pre.code .self{color:var(--self)}
+
+/* boxes */
+.box{border-radius:10px; padding:16px 18px; background:var(--soft); border:1px solid var(--line)}
+.box .tag{font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px}
+.box p{font-size:16.5px; margin:0; max-width:none}
+.box p + p{margin-top:8px}
+.box.trap{background:var(--warn-soft); border-color:transparent}
+.box.trap .tag{color:var(--warn)}
+.box.key{background:var(--acc-soft); border-color:transparent}
+.box.key .tag{color:var(--acc)}
+.box.okb{background:var(--ok-soft); border-color:transparent}
+.box.okb .tag{color:var(--ok)}
+
+/* math lines */
+.eq{font-family:var(--mono); font-size:18px; line-height:1.9; font-variant-numeric:tabular-nums}
+.eq b{color:var(--acc); font-weight:500}
+.eq .r{color:var(--muted)}
+
+/* tables */
+table.t{border-collapse:collapse; width:100%; font-size:16.5px}
+table.t th{text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:0 12px 8px 0; border-bottom:1px solid var(--line-2)}
+table.t td{padding:10px 12px 10px 0; border-bottom:1px solid var(--line); vertical-align:top}
+table.t td.num{font-family:var(--mono)}
+table.t tr.hl td{background:var(--warn-soft)}
+
+/* figures */
+figure{margin:0}
+figure svg{display:block; width:100%; height:auto; overflow:visible}
+figcaption{font-size:14px; color:var(--muted); margin-top:10px; line-height:1.5}
+.reveal-btn{margin-top:14px; align-self:flex-start; border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer}
+.reveal-btn:hover{border-color:var(--acc); color:var(--acc)}
+svg .gval{opacity:0} .shown svg .gval{opacity:1} .shown svg .gq{opacity:0}
+svg .gq{fill:var(--faint)}
+
+/* cover */
+.cover{justify-content:center; padding-left:96px}
+.cover h1{font-size:76px; font-weight:600; line-height:1.02; margin:6px 0 22px; letter-spacing:-.02em}
+.cover h1 em{font-style:italic; font-weight:500; color:var(--acc)}
+.cover .lead{font-size:23px; max-width:40ch; color:var(--muted); line-height:1.45}
+.cover .meta{margin-top:40px; display:flex; gap:40px; font-size:14.5px; color:var(--muted)}
+.cover .meta b{display:block; color:var(--ink); font-weight:600; font-size:15.5px; margin-bottom:2px}
+.keys{position:absolute; left:96px; bottom:44px; font-size:13.5px; color:var(--faint)}
+.keys kbd{font-family:var(--mono); font-size:12px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--muted); background:var(--soft)}
+
+/* map */
+.steps{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:6px}
+.step{border-top:3px solid var(--acc); padding-top:12px}
+.step .n{font-family:var(--mono); font-size:13px; color:var(--acc)}
+.step b{display:block; font-family:var(--serif); font-size:19px; font-weight:600; margin:4px 0 6px; line-height:1.2}
+.step span{font-size:14.5px; color:var(--muted); line-height:1.45}
+
+/* block divider slides */
+.divider{justify-content:center}
+.divider .bn{font-family:var(--mono); font-size:15px; color:var(--acc); margin-bottom:12px}
+.divider h2{font-size:58px; margin-bottom:18px}
+.divider p{font-size:22px; color:var(--muted); max-width:46ch}
+
+/* Q&A */
+.qa{display:flex; flex-direction:column; gap:14px}
+.q{border:1px solid var(--line); border-radius:10px; padding:14px 18px; background:var(--soft)}
+.q .qt{font-size:18px; line-height:1.45; display:flex; gap:12px}
+.q .qt .qn{font-family:var(--mono); color:var(--acc); font-size:15px; padding-top:2px}
+.q button{margin-top:10px; margin-left:30px; border:0; background:none; padding:0; font-size:14px; font-weight:600; color:var(--acc); cursor:pointer}
+.q .a{display:none; margin:8px 0 0 30px; font-size:16.5px; line-height:1.5; color:var(--ink); padding-left:12px; border-left:2px solid var(--ok)}
+.q.open .a{display:block}
+.q.open button{display:none}
+
+/* checklist */
+.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+.check li{display:grid; grid-template-columns:22px 1fr; gap:12px; font-size:18px; line-height:1.45}
+.check li::before{content:""; width:18px; height:18px; border:1.5px solid var(--line-2); border-radius:5px; margin-top:3px}
+.copy{border:1px solid var(--line-2); background:var(--paper); border-radius:7px; padding:5px 11px; font-size:12.5px; font-weight:600; cursor:pointer; letter-spacing:.04em}
+.copy:hover{border-color:var(--acc); color:var(--acc)}
+
+/* chrome: nav + index */
+.nav{position:fixed; right:18px; bottom:16px; display:flex; gap:6px; z-index:20}
+.nav button{border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:6px 11px; font-size:13px; font-weight:600; cursor:pointer}
+.nav button:hover{border-color:var(--acc); color:var(--acc)}
+.nav .count{font-family:var(--mono); font-size:12.5px; color:var(--muted); padding:7px 6px}
+.index{position:fixed; top:0; left:0; bottom:0; width:380px; background:var(--paper); border-right:1px solid var(--line); z-index:30; transform:translateX(-102%); transition:transform .22s ease; overflow:auto; padding:22px 20px}
+.index.open{transform:none; box-shadow:0 0 60px rgba(0,0,0,.25)}
+.index h4{font-family:var(--serif); font-size:20px; margin:0 0 4px}
+.index .hint{font-size:12.5px; color:var(--muted); margin-bottom:16px}
+.index .grp{font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--acc); margin:16px 0 6px}
+.index a{display:grid; grid-template-columns:30px 1fr; gap:6px; padding:6px 8px; border-radius:6px; font-size:14px; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.35}
+.index a span{font-family:var(--mono); font-size:12px; color:var(--faint); padding-top:1px}
+.index a:hover{background:var(--soft)}
+.index a.cur{background:var(--acc-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>
+/* ---- extras (Aulas 02/03) ---- */
+.flow{display:flex; align-items:stretch; gap:8px; margin:6px 0 20px}
+.flow .st{flex:1; border:1px solid var(--line); background:var(--soft); border-radius:10px; padding:11px 11px 9px}
+.flow .st b{display:block; font-family:var(--mono); font-size:13.5px; color:var(--acc); margin-bottom:4px}
+.flow .st span{font-size:13px; color:var(--muted); line-height:1.4; display:block}
+.flow .st small{display:block; font-family:var(--mono); font-size:12px; color:var(--faint); margin-top:6px}
+.flow .ar{align-self:center; color:var(--faint); font-family:var(--mono)}
+.samples{display:grid; grid-template-columns:1fr 1fr; gap:0 28px}
+.samples div{font-family:var(--mono); font-size:18px; padding:6px 0; border-bottom:1px solid var(--line)}
+.big{font-family:var(--serif); font-size:58px; font-weight:600; line-height:1; letter-spacing:-.02em}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin:4px 0 24px}
+.kpis div span{display:block; font-size:14px; color:var(--muted); margin-top:6px}
+</style>
+</head>
+<body>
+<div class="viewport"><div class="deck" id="deck"><div class="progress" id="progress"></div>
+
+<!-- =================================================================== CAPA -->
+<section class="slide cover" data-block="Abertura" data-title="Capa">
+  <div class="eyebrow">Aula 03 · Fase 1 · Semana S03</div>
+  <h1>Um MLP que<br><em>lembra três letras</em></h1>
+  <p class="lead">O salto do bigrama para uma rede de verdade: embeddings, uma camada escondida e as técnicas para treinar direito — minibatch, taxa de aprendizado e treino, validação e teste.</p>
+  <div class="meta">
+    <div><b>Base</b>Andrej Karpathy · makemore, parte 2</div>
+    <div><b>Código</b>lectures/makemore · mlp.ipynb</div>
+    <div><b>Duração de revisão</b>~25 minutos</div>
+  </div>
+  <div class="keys"><kbd>←</kbd> <kbd>→</kbd> navegar · <kbd>I</kbd> índice · as perguntas escondem a resposta até você clicar</div>
+</section>
+
+<section class="slide" data-block="Abertura" data-title="O mapa da aula">
+  <div class="eyebrow">O mapa da aula</div>
+  <h2>Cinco passos, da janela de contexto ao treino bem feito</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><b>Por que mais contexto</b><span>A contagem explode; a rede generaliza.</span></div>
+    <div class="step"><div class="n">2</div><b>A janela de contexto</b><span>Três letras de entrada, uma de saída.</span></div>
+    <div class="step"><div class="n">3</div><b>Embeddings</b><span>Cada letra vira um vetor que a rede aprende.</span></div>
+    <div class="step"><div class="n">4</div><b>A rede</b><span>Camada escondida, tanh e cross_entropy.</span></div>
+    <div class="step"><div class="n">5</div><b>Treinar direito</b><span>Minibatch, taxa de aprendizado e os três conjuntos.</span></div>
+  </div>
+  <div class="box key" style="margin-top:34px">
+    <div class="tag">Ao final você deve conseguir</div>
+    <p>Montar <code class="i">X</code> e <code class="i">Y</code> com janela deslizante · explicar <code class="i">C[X]</code> e <code class="i">view</code> · treinar com minibatch · achar a taxa de aprendizado com uma varredura · separar treino, validação e teste e diagnosticar o modelo pelos números.</p>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 1 -->
+<section class="slide divider" data-block="1 · Contexto" data-title="Bloco 1">
+  <div class="bn">Bloco 1 de 5</div>
+  <h2>Por que mais contexto</h2>
+  <p>O bigrama parou em 2,454. Para fazer melhor, o modelo precisa olhar mais de uma letra para trás.</p>
+</section>
+
+<section class="slide" data-block="1 · Contexto" data-title="O limite da contagem">
+  <div class="eyebrow">Bloco 1 · Contexto</div>
+  <h2>Contar não escala: a tabela explode</h2>
+  <div class="cols">
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Contexto</th><th>Linhas da tabela</th><th>Contagens</th></tr></thead>
+        <tbody>
+          <tr><td>1 letra (bigrama)</td><td class="num">27</td><td class="num">729</td></tr>
+          <tr><td>2 letras</td><td class="num">729</td><td class="num">19.683</td></tr>
+          <tr class="hl"><td>3 letras</td><td class="num">19.683</td><td class="num">531.441</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted" style="margin-top:8px">O conjunto inteiro tem 228.146 exemplos. Com 3 letras de contexto há mais de duas casas para cada exemplo: quase tudo fica zero.</p>
+    </div>
+    <div class="stack">
+      <p>Uma tabela trata cada contexto como uma ilha. "..a" e "..e" não compartilham nada, mesmo sendo situações parecidas: começo de nome, vogal.</p>
+      <div class="box key"><div class="tag">A ideia da aula</div><p>Representar cada letra por um <b>vetor</b> aprendido. Letras que se comportam parecido ficam com vetores parecidos, e o que a rede aprende sobre uma vale um pouco para a outra. A arquitetura segue o artigo de Bengio et al. (2003) sobre modelos de linguagem neurais.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 2 -->
+<section class="slide divider" data-block="2 · Janela" data-title="Bloco 2">
+  <div class="bn">Bloco 2 de 5</div>
+  <h2>A janela de contexto</h2>
+  <p>O conjunto de treino muda de forma: agora a entrada são três letras.</p>
+</section>
+
+<section class="slide" data-block="2 · Janela" data-title="Janela deslizante">
+  <div class="eyebrow">Bloco 2 · Janela</div>
+  <h2>Uma janela de três letras desliza pelo nome</h2>
+  <div class="cols">
+<pre class="code sm" data-py>block_size = 3   # quantas letras olhamos para prever a próxima
+
+def build_dataset(words):
+    X, Y = [], []
+    for w in words:
+        context = [0] * block_size     # começa com '...'
+        for ch in w + '.':
+            ix = stoi[ch]
+            X.append(context)
+            Y.append(ix)
+            context = context[1:] + [ix]   # corta e anexa
+    return torch.tensor(X), torch.tensor(Y)</pre>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Entrada (X)</th><th>Saída (Y)</th></tr></thead>
+        <tbody>
+          <tr><td class="num">. . .</td><td class="num">e</td></tr>
+          <tr><td class="num">. . e</td><td class="num">m</td></tr>
+          <tr><td class="num">. e m</td><td class="num">m</td></tr>
+          <tr><td class="num">e m m</td><td class="num">a</td></tr>
+          <tr><td class="num">m m a</td><td class="num">.</td></tr>
+        </tbody>
+      </table>
+      <p class="small">"emma" ainda gera 5 exemplos, um por letra mais o fim. O total continua <span class="num">228.146</span>: muda a entrada, não a quantidade.</p>
+      <p class="small muted"><code class="i">X</code> tem shape <span class="num">(N, 3)</span>; <code class="i">Y</code>, <span class="num">(N,)</span>. Os pontos do começo funcionam como preenchimento.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 3 -->
+<section class="slide divider" data-block="3 · Embeddings" data-title="Bloco 3">
+  <div class="bn">Bloco 3 de 5</div>
+  <h2>Embeddings</h2>
+  <p>Uma tabela pequena que guarda um vetor por letra. A rede aprende os valores junto com o resto.</p>
+</section>
+
+<section class="slide" data-block="3 · Embeddings" data-title="A tabela de consulta C">
+  <div class="eyebrow">Bloco 3 · Embeddings</div>
+  <h2>A tabela C: uma linha por letra</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code" data-py>C = torch.randn((27, 2))   # 27 letras, 2 números cada
+
+C[5]          # o vetor da letra 'e', shape (2,)
+emb = C[X]    # indexa o tensor inteiro de uma vez
+emb.shape     # (N, 3, 2)</pre>
+      <p>Indexar <code class="i">C</code> com o tensor <code class="i">X</code> troca cada índice pelo seu vetor. Para <code class="i">X</code> de shape <span class="num">(N, 3)</span>, o resultado é <span class="num">(N, 3, 2)</span>: N exemplos, 3 letras, 2 números por letra.</p>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">O mesmo truque da Aula 02</div><p><code class="i">F.one_hot(5, 27).float() @ C</code> dá exatamente <code class="i">C[5]</code>. Ou seja, a tabela de embeddings é uma primeira camada linear sem viés, alimentada por one-hot. Indexar é só o jeito barato de fazer a mesma conta.</p></div>
+      <p class="small muted">No modelo final, cada letra vira um vetor de 10 números em vez de 2: a tabela passa a ter shape <span class="num">(27, 10)</span>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Embeddings" data-title="Concatenar com view">
+  <div class="eyebrow">Bloco 3 · Embeddings</div>
+  <h2>Juntar as três letras num vetor só: view</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code" data-py>emb.shape                 # (32, 3, 2)
+
+h_in = emb.view(-1, 6)    # (32, 6): as 3 letras lado a lado
+
+# alternativa que funciona, mas copia memória:
+torch.cat(torch.unbind(emb, 1), 1)</pre>
+      <p>A camada escondida espera um vetor por exemplo. <code class="i">view(-1, 6)</code> lê os mesmos números como 6 colunas por linha; o <code class="i">-1</code> deixa o PyTorch calcular o número de linhas.</p>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">Por que view é de graça</div><p>Um tensor é um bloco de memória contínuo mais uma "regra de leitura" (shape e strides). <code class="i">view</code> só troca a regra; nenhum número é copiado. Já <code class="i">torch.cat</code> cria um tensor novo.</p></div>
+      <div class="box trap"><div class="tag">Armadilha</div><p>O <span class="num">6</span> é <code class="i">block_size × dimensão do embedding</code>. Mudou um dos dois e esqueceu de mudar o número, o <code class="i">view</code> quebra ou, pior, embaralha os exemplos. No modelo final o valor é <span class="num">30</span> (3 × 10).</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Embeddings" data-title="O que os embeddings aprendem">
+  <div class="eyebrow">Bloco 3 · Embeddings</div>
+  <h2>Depois do treino, as vogais se juntam</h2>
+  <div class="cols wide-left">
+    <figure><svg id="emb2" viewBox="0 0 600 420" role="img" aria-label="Embeddings de duas dimensões das 27 letras"></svg>
+      <figcaption>Embeddings de 2 dimensões, de um modelo que treinei com 100 neurônios na camada escondida. Ninguém disse à rede o que é vogal.</figcaption></figure>
+    <div class="stack">
+      <ul class="clean">
+        <li><b>a, e, i, o, u</b> ficam juntas à direita: para prever a próxima letra, elas se comportam de forma parecida.</li>
+        <li><b>q</b> fica isolado: é quase sempre seguido de "u", um comportamento único.</li>
+        <li>O <b>ponto</b> também se afasta: marcar início e fim é um papel diferente de qualquer letra.</li>
+      </ul>
+      <p class="small muted">Com só 2 números por letra o modelo fica apertado: validação em <span class="num">2,288</span>. É um gargalo, e o Bloco 5 mostra o ganho de abrir para 10.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 4 -->
+<section class="slide divider" data-block="4 · A rede" data-title="Bloco 4">
+  <div class="bn">Bloco 4 de 5</div>
+  <h2>A rede</h2>
+  <p>Embeddings concatenados, uma camada escondida com tanh e uma camada de saída com 27 logits.</p>
+</section>
+
+<section class="slide" data-block="4 · A rede" data-title="A arquitetura">
+  <div class="eyebrow">Bloco 4 · A rede</div>
+  <h2>Do contexto aos 27 logits</h2>
+  <div class="flow">
+    <div class="st"><b>X</b><span>3 índices</span><small>(32, 3)</small></div><div class="ar">→</div>
+    <div class="st"><b>C[X]</b><span>3 vetores de 10</span><small>(32, 3, 10)</small></div><div class="ar">→</div>
+    <div class="st"><b>view</b><span>concatena</span><small>(32, 30)</small></div><div class="ar">→</div>
+    <div class="st"><b>tanh(@W1 + b1)</b><span>camada escondida</span><small>(32, 200)</small></div><div class="ar">→</div>
+    <div class="st"><b>@W2 + b2</b><span>logits</span><small>(32, 27)</small></div><div class="ar">→</div>
+    <div class="st"><b>cross_entropy</b><span>loss</span><small>escalar</small></div>
+  </div>
+  <div class="cols">
+    <table class="t">
+      <thead><tr><th>Parâmetro</th><th>Shape</th><th>Números</th></tr></thead>
+      <tbody>
+        <tr><td class="num">C</td><td class="num">27 × 10</td><td class="num">270</td></tr>
+        <tr><td class="num">W1, b1</td><td class="num">30 × 200, 200</td><td class="num">6.200</td></tr>
+        <tr><td class="num">W2, b2</td><td class="num">200 × 27, 27</td><td class="num">5.427</td></tr>
+        <tr><td><b>Total</b></td><td></td><td class="num"><b>11.897</b></td></tr>
+      </tbody>
+    </table>
+    <div class="stack">
+      <p>O batch de 32 atravessa a rede inteira de uma vez. Cada coluna do diagrama é um shape que você deve conseguir prever de cabeça.</p>
+      <div class="box key"><div class="tag">Compare</div><p>O bigrama tinha 729 parâmetros e olhava 1 letra. Aqui são ~12 mil e 3 letras. Uma tabela de 3 letras teria 531 mil.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · A rede" data-title="O forward">
+  <div class="eyebrow">Bloco 4 · A rede</div>
+  <h2>O forward em quatro linhas</h2>
+  <div class="cols wide-left">
+<pre class="code" data-py>g = torch.Generator().manual_seed(2147483647)
+C  = torch.randn((27, 10), generator=g)
+W1 = torch.randn((30, 200), generator=g)
+b1 = torch.randn(200, generator=g)
+W2 = torch.randn((200, 27), generator=g)
+b2 = torch.randn(27, generator=g)
+parameters = [C, W1, b1, W2, b2]
+
+emb = C[Xtr[ix]]                         # (32, 3, 10)
+h = torch.tanh(emb.view(-1, 30) @ W1 + b1)   # (32, 200)
+logits = h @ W2 + b2                     # (32, 27)
+loss = F.cross_entropy(logits, Ytr[ix])</pre>
+    <div class="stack">
+      <p><code class="i">emb.view(-1, 30) @ W1</code> tem shape <span class="num">(32, 200)</span> e <code class="i">b1</code> tem <span class="num">(200,)</span>. O broadcasting estica <code class="i">b1</code> para todas as 32 linhas: cada neurônio soma o mesmo viés em todos os exemplos. Exatamente o que queremos.</p>
+      <div class="box key"><div class="tag">tanh</div><p>A não linearidade da Aula 01. Sem ela, duas camadas lineares seguidas valeriam uma só, e a camada escondida não serviria para nada.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · A rede" data-title="Por que F.cross_entropy">
+  <div class="eyebrow">Bloco 4 · A rede</div>
+  <h2>Use F.cross_entropy, não a conta à mão</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py># à mão (Aula 02):
+counts = logits.exp()
+prob = counts / counts.sum(1, keepdims=True)
+loss = -prob[torch.arange(32), Y].log().mean()
+
+# igual, e melhor:
+loss = F.cross_entropy(logits, Y)</pre>
+      <ul class="clean">
+        <li><b>Mais eficiente:</b> não cria os tensores intermediários.</li>
+        <li><b>Backward mais simples:</b> o gradiente da combinação inteira tem fórmula fechada.</li>
+        <li><b>Numericamente estável:</b> o motivo que mais importa.</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <div class="box trap"><div class="tag">O estouro do exp</div>
+        <p>Com logits como <span class="num">[−3, 0, 5, 100]</span>, <code class="i">exp(100)</code> estoura o float32 e vira <code class="i">inf</code>. Dividir <code class="i">inf</code> por <code class="i">inf</code> dá <code class="i">nan</code>, e o treino morre.</p>
+        <p>A <code class="i">cross_entropy</code> subtrai o maior logit antes do <code class="i">exp</code>. A resposta não muda, porque a softmax dá o mesmo resultado se você somar a mesma constante a todos os logits; só que agora o maior expoente é 0.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== BLOCO 5 -->
+<section class="slide divider" data-block="5 · Treino" data-title="Bloco 5">
+  <div class="bn">Bloco 5 de 5</div>
+  <h2>Treinar direito</h2>
+  <p>Três técnicas que você vai usar em todo modelo daqui para frente: minibatch, varredura da taxa de aprendizado e a separação em treino, validação e teste.</p>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="Minibatch">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Minibatch: 32 exemplos por passo</h2>
+  <div class="cols wide-left">
+<pre class="code" data-py>for i in range(200000):
+    ix = torch.randint(0, Xtr.shape[0], (32,))   # minibatch
+
+    emb = C[Xtr[ix]]
+    h = torch.tanh(emb.view(-1, 30) @ W1 + b1)
+    logits = h @ W2 + b2
+    loss = F.cross_entropy(logits, Ytr[ix])
+
+    for p in parameters:
+        p.grad = None
+    loss.backward()
+
+    lr = 0.1 if i < 100000 else 0.01             # decaimento
+    for p in parameters:
+        p.data += -lr * p.grad</pre>
+    <div class="stack">
+      <p>Calcular o gradiente com os 182 mil exemplos a cada passo é caro. Com 32 sorteados, o gradiente é uma <b>aproximação</b>, mas aponta para a direção certa na média.</p>
+      <div class="box key"><div class="tag">A troca</div><p>É muito melhor dar muitos passos aproximados do que poucos passos exatos. Na minha reprodução em NumPy, os 200 mil passos levaram <span class="num">27 s</span>.</p></div>
+      <p class="small muted">Efeito colateral: a loss de cada passo fica ruidosa. Para avaliar o modelo, calcule a loss no conjunto inteiro, como no slide de diagnóstico.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="Varredura da taxa de aprendizado">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Achar a taxa de aprendizado em vez de chutar</h2>
+  <div class="cols wide-right">
+    <div class="stack">
+<pre class="code sm" data-py>lre = torch.linspace(-3, 0, 1000)
+lrs = 10**lre          # de 0.001 a 1
+
+for i in range(1000):
+    ...                # forward e backward
+    lr = lrs[i]        # a taxa cresce a cada passo
+    ...
+    lri.append(lre[i]); lossi.append(loss.item())</pre>
+      <p>Mil passos, cada um com uma taxa maior que a anterior, em escala exponencial. A curva desce enquanto a taxa ajuda, chega a um vale e explode quando a taxa fica grande demais.</p>
+      <div class="box key"><div class="tag">Leitura</div><p>Escolha uma taxa no vale, um pouco antes da subida: aqui, <span class="num">0,1</span>. Depois, no fim do treino, reduza 10 vezes (<span class="num">0,01</span>) para refinar.</p></div>
+    </div>
+    <figure><svg id="sweep" viewBox="0 0 560 360" role="img" aria-label="Loss em função do expoente da taxa de aprendizado"></svg>
+      <figcaption>Minha varredura em NumPy, com média móvel de 25 passos. O mínimo ficou perto de <span class="num">10<sup>−0,9</sup> ≈ 0,13</span>. A loss é alta porque é o começo do treino.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="A curva de treino">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>200 mil passos, com o decaimento visível</h2>
+  <div class="cols wide-left">
+    <figure><svg id="curve" viewBox="0 0 620 360" role="img" aria-label="Loss de treino ao longo de 200 mil passos"></svg>
+      <figcaption>Loss de treino por minibatch, média de cada bloco de mil passos. Reprodução em NumPy.</figcaption></figure>
+    <div class="stack">
+      <p>A loss inicial é enorme, <span class="num">26,6</span>, muito acima dos <span class="num">3,30</span> de um chute uniforme. Os pesos aleatórios fazem a rede dar probabilidade quase zero para a letra certa, com muita confiança.</p>
+      <p>Em <span class="num">100 mil</span> passos a taxa cai de 0,1 para 0,01 e a curva dá um degrau para baixo: com passos menores o modelo para de pular em volta do vale.</p>
+      <p class="small muted">Esse começo ruim tem conserto, e é o assunto da parte 3: inicializar os pesos com a escala certa.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="Treino, validação e teste">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Três conjuntos, três funções</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py>random.seed(42)
+random.shuffle(words)
+n1 = int(0.8*len(words))
+n2 = int(0.9*len(words))
+
+Xtr,  Ytr  = build_dataset(words[:n1])    # 80%
+Xdev, Ydev = build_dataset(words[n1:n2])  # 10%
+Xte,  Yte  = build_dataset(words[n2:])    # 10%</pre>
+      <p class="small muted">Divisão do notebook: <span class="num">182.441</span> exemplos de treino, <span class="num">22.902</span> de validação e <span class="num">22.803</span> de teste. A separação é por <b>nome</b>, antes de montar as janelas.</p>
+    </div>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Conjunto</th><th>Serve para</th></tr></thead>
+        <tbody>
+          <tr><td><b>Treino</b></td><td>ajustar os parâmetros (C, W1, b1, W2, b2)</td></tr>
+          <tr><td><b>Validação</b> (dev)</td><td>escolher hiperparâmetros: tamanho do embedding, da camada, taxa</td></tr>
+          <tr><td><b>Teste</b></td><td>medir uma vez, no fim, quanto o modelo vale de verdade</td></tr>
+        </tbody>
+      </table>
+      <div class="box trap"><div class="tag">Armadilha</div><p>Cada vez que você olha o teste para decidir alguma coisa, ele vira um segundo dev e passa a mentir a seu favor. Use com parcimônia.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="Diagnóstico">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Treino e validação próximos: dá para crescer</h2>
+  <div class="cols">
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th></th><th>Treino</th><th>Validação</th><th>Teste</th></tr></thead>
+        <tbody>
+          <tr><td>Notebook</td><td class="num">2,1260</td><td class="num">2,1701</td><td class="num">—</td></tr>
+          <tr><td>Minha reprodução</td><td class="num">2,111</td><td class="num">2,155</td><td class="num">2,149</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted" style="margin-top:8px">Loss média sobre o conjunto inteiro, não o minibatch. A reprodução usou outra semente, por isso os números diferem um pouco.</p>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">Como ler</div><p><b>Treino ≈ validação</b>: o modelo não está decorando o conjunto. Se estiver ruim, é <b>underfitting</b> e o remédio é um modelo maior: mais neurônios, embedding maior, mais contexto.</p><p><b>Treino bem abaixo da validação</b>: <b>overfitting</b>. O modelo decorou; o remédio é mais dados, regularização ou um modelo menor.</p></div>
+      <p class="small">Aqui a diferença é de <span class="num">0,04</span>: ainda há espaço para aumentar o modelo antes de começar a decorar.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="O progresso até aqui">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Três aulas, uma escada de losses</h2>
+  <div class="cols wide-left">
+    <figure><svg id="ladder" viewBox="0 0 620 300" role="img" aria-label="Comparação da loss dos modelos vistos até aqui"></svg>
+      <figcaption>O bigrama foi medido no conjunto inteiro; os MLPs, na validação. Para comparação justa, o MLP é medido em nomes que nunca viu, o que só o torna mais difícil.</figcaption></figure>
+    <div class="stack">
+      <p>Abrir o embedding de 2 para 10 dimensões e a camada de 100 para 200 neurônios levou a validação de <span class="num">2,288</span> para <span class="num">2,155</span>.</p>
+      <div class="box key"><div class="tag">O processo</div><p>Mudar um hiperparâmetro, treinar, medir na validação, anotar. Esse ciclo é o trabalho do dia a dia em ML, e o conjunto de validação é o que o torna honesto.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="Gerar nomes">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Os nomes melhoraram visivelmente</h2>
+  <div class="cols">
+<pre class="code sm" data-py>g = torch.Generator().manual_seed(2147483647 + 10)
+
+for _ in range(20):
+    out = []
+    context = [0] * block_size        # começa com '...'
+    while True:
+        emb = C[torch.tensor([context])]          # (1, 3, 10)
+        h = torch.tanh(emb.view(1, -1) @ W1 + b1)
+        logits = h @ W2 + b2
+        probs = F.softmax(logits, dim=1)
+        ix = torch.multinomial(probs, num_samples=1, generator=g).item()
+        context = context[1:] + [ix]  # a janela anda
+        out.append(ix)
+        if ix == 0:
+            break
+    print(''.join(itos[i] for i in out))</pre>
+    <div class="stack">
+      <div class="samples">
+        <div>carmahela.</div><div>jhovi.</div><div>kimrin.</div><div>thil.</div>
+        <div>halanna.</div><div>jazhien.</div><div>nellara.</div><div>kaleigh.</div>
+        <div>quinton.</div><div>lilea.</div><div>jamilio.</div><div>jeron.</div>
+      </div>
+      <p class="small muted" style="margin-top:10px">Saídas salvas no notebook. Compare com <span class="num">minaymoryles.</span> e <span class="num">anchshizarie.</span> do bigrama: agora vários parecem nomes de verdade.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== FECHAMENTO -->
+<section class="slide" data-block="Fechamento" data-title="A aula em seis linhas">
+  <div class="eyebrow">Fechamento</div>
+  <h2>A aula em seis linhas</h2>
+  <ul class="clean" style="gap:16px">
+    <li><b>Contar não escala</b> com mais contexto; vetores aprendidos generalizam entre contextos parecidos.</li>
+    <li><b>Janela deslizante</b>: <code class="i">block_size</code> letras de entrada, a próxima de saída. Pontos preenchem o começo.</li>
+    <li><b>Embeddings</b>: <code class="i">C[X]</code> é uma camada linear sobre one-hot, feita por indexação. <code class="i">view</code> concatena sem copiar.</li>
+    <li><b>Rede</b>: tanh na camada escondida, logits na saída e <code class="i">F.cross_entropy</code>, que é mais rápida e estável.</li>
+    <li><b>Treino</b>: minibatch de 32, taxa achada por varredura (0,1) e decaimento no fim (0,01).</li>
+    <li><b>Três conjuntos</b>: treino ajusta, validação escolhe, teste mede uma vez. Treino ≈ validação → aumente o modelo.</li>
+  </ul>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 1">
+  <div class="eyebrow">Pare e responda · 1 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">1</span><span>Por que a tabela de contagem não funciona com 3 letras de contexto?</span></div>
+      <button>ver resposta</button><div class="a">São 19.683 contextos × 27 = 531.441 contagens para 228 mil exemplos: quase tudo fica zero. E cada contexto é uma ilha: nada aprendido sobre "..a" ajuda em "..e". Os embeddings compartilham informação entre contextos parecidos.</div></div>
+    <div class="q"><div class="qt"><span class="qn">2</span><span>Com <code class="i">X</code> de shape (32, 3) e <code class="i">C</code> de (27, 10), qual é o shape de <code class="i">C[X]</code>? E depois de <code class="i">.view(-1, 30)</code>?</span></div>
+      <button>ver resposta</button><div class="a"><span class="num">(32, 3, 10)</span>, e depois <span class="num">(32, 30)</span>: os três vetores de cada exemplo lado a lado, sem copiar memória.</div></div>
+    <div class="q"><div class="qt"><span class="qn">3</span><span>Por que usar <code class="i">F.cross_entropy</code> em vez de exp, normalizar e log à mão?</span></div>
+      <button>ver resposta</button><div class="a">É mais eficiente, tem backward mais simples e é estável: subtrai o maior logit antes do exp, o que evita o <code class="i">inf</code> e o <code class="i">nan</code> com logits grandes, sem mudar o resultado.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 2">
+  <div class="eyebrow">Pare e responda · 2 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">4</span><span>Se o gradiente de um minibatch de 32 é só uma aproximação, por que funciona?</span></div>
+      <button>ver resposta</button><div class="a">Na média ele aponta na direção certa. Muitos passos baratos e aproximados chegam mais longe do que poucos passos exatos e caros, no mesmo tempo.</div></div>
+    <div class="q"><div class="qt"><span class="qn">5</span><span>Como a varredura de taxa de aprendizado leva a 0,1?</span></div>
+      <button>ver resposta</button><div class="a">A taxa cresce exponencialmente de 0,001 a 1 em mil passos. A loss cai, chega a um vale e explode quando a taxa fica grande. Escolhe-se um valor no vale, um pouco antes da subida.</div></div>
+    <div class="q"><div class="qt"><span class="qn">6</span><span>Treino em 2,13 e validação em 2,17: overfitting ou underfitting? O que você faria?</span></div>
+      <button>ver resposta</button><div class="a">Os dois números estão próximos, então o modelo não está decorando: é underfitting leve. O passo seguinte é aumentar o modelo (embedding, neurônios, contexto) e acompanhar a validação.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Meta da semana S03">
+  <div class="eyebrow">Meta da semana S03</div>
+  <h2>Agora treine o MLP com nomes brasileiros</h2>
+  <div class="cols">
+    <div class="stack">
+      <ul class="check">
+        <li>Reescrever <code class="i">build_dataset</code> e o forward (<code class="i">C</code>, <code class="i">view</code>, tanh, <code class="i">cross_entropy</code>) sem olhar.</li>
+        <li>Rodar a varredura de taxa de aprendizado e escolher a sua.</li>
+        <li>Treinar com os nomes do IBGE e reportar treino e validação.</li>
+        <li>Mudar um hiperparâmetro por vez (<code class="i">block_size</code>, embedding, neurônios) e anotar a validação numa tabela.</li>
+      </ul>
+      <p class="small muted">Os números não serão comparáveis com os destes slides: outro conjunto, outra dificuldade. Compare suas próprias execuções entre si.</p>
+    </div>
+    <div class="stack">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <h3 style="margin:0">Para revisar com o Claude</h3>
+        <button class="copy" data-copy="promptReview">copiar</button>
+      </div>
+<pre class="code sm" id="promptReview" style="white-space:pre-wrap">Acabei a parte 2 do makemore (MLP). Vou colar meu código e minha tabela de experimentos.
+
+Não corrija por mim. Quero que você:
+1. Confira os shapes de cada linha do forward e me pergunte os que eu não anotei.
+2. Olhe minha tabela de treino x validação e me diga se estou em underfitting ou overfitting, e por quê.
+3. Me sugira o próximo experimento, mas me faça prever o resultado antes de rodar.
+
+Meu código e minha tabela:
+&lt;cole aqui&gt;</pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Créditos e licença">
+  <div class="eyebrow">Créditos</div>
+  <h2>De onde vem este material</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>O código é de <b>Andrej Karpathy</b>, do repositório <span class="num">karpathy/nn-zero-to-hero</span> (notebook <span class="num">lectures/makemore/makemore_part2_mlp.ipynb</span>). O conjunto <span class="num">names.txt</span> vem de <span class="num">karpathy/makemore</span>. A arquitetura segue Bengio et al., <i>A Neural Probabilistic Language Model</i> (2003).</p>
+      <p class="small muted">Os trechos foram encurtados e comentados em português. A varredura de taxa, a curva de treino, os embeddings 2D e a linha "minha reprodução" vêm de uma reimplementação em NumPy, com gradientes escritos à mão e outra semente. As losses do notebook, a divisão dos conjuntos e as amostras de nomes são as saídas salvas no notebook.</p>
+    </div>
+    <div class="box" style="font-size:12.5px; line-height:1.5; color:var(--muted)">
+      <div class="tag" style="color:var(--muted)">MIT License</div>
+      <p style="font-size:12.5px">Copyright (c) 2022 Andrej Karpathy</p>
+      <p style="font-size:12px">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+      <p style="font-size:12px">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+      <p style="font-size:12px">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div class="nav">
+  <button id="btnIndex" title="Índice (I)">≡ índice</button>
+  <button id="btnPrev" title="Anterior (←)">←</button>
+  <span class="count" id="count"></span>
+  <button id="btnNext" title="Próximo (→)">→</button>
+</div>
+<aside class="index" id="index" aria-label="Índice dos slides"></aside>
+
+<script>
+/* ---------- syntax highlight (Python, mínimo) ---------- */
+const KW = new Set("def class return for in if else elif not and or lambda import from as while with assert is None True False pass".split(" "));
+const BI = new Set("print range len sum zip set isinstance super".split(" "));
+function esc(s){ return s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function highlight(src){
+  const re = /(#[^\n]*)|(f?'(?:[^'\\\n]|\\.)*'|f?"(?:[^"\\\n]|\\.)*")|(\b\d+(?:\.\d+)?(?:e-?\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+  let out = "", m;
+  while ((m = re.exec(src))){
+    if (m[1]) out += `<span class="c">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="s">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="n">${m[3]}</span>`;
+    else if (m[4]){
+      const w = m[4];
+      if (KW.has(w)) out += `<span class="k">${w}</span>`;
+      else if (w === "self") out += `<span class="self">${w}</span>`;
+      else if (BI.has(w) || /^__\w+__$/.test(w)) out += `<span class="f">${w}</span>`;
+      else out += w;
+    } else out += esc(m[5]);
+  }
+  return out;
+}
+document.querySelectorAll("pre[data-py]").forEach(p => { p.innerHTML = highlight(p.textContent); });
+
+/* ---------- svg helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const br = n => {
+  let s = (Math.abs(n) < 1e-12 ? 0 : n).toFixed(4).replace(/0+$/, "");
+  if (s.endsWith(".")) s += "0";
+  return s.replace(".", ",").replace("-", "−");
+};
+const fmt = (n, d) => n.toFixed(d).replace(".", ",").replace("-", "−");
+
+/* ---------- charts drawn to scale ---------- */
+function chart(svgId, o){
+  const svg = document.getElementById(svgId);
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const m = {l:52, r:20, t:16, b:40};
+  const X = v => m.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (W - m.l - m.r);
+  const Y = v => H - m.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (H - m.t - m.b);
+  o.yt.forEach(t => {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(t), y2:Y(t), stroke:"var(--line)", "stroke-width":t===0&&o.zeroAxis?"1.4":"1"}, svg);
+    el("text", {x:m.l-10, y:Y(t)+4, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, fmt(t, o.yd||0));
+  });
+  o.xt.forEach(t => {
+    if (o.zeroAxis && t === 0) el("line", {x1:X(0), x2:X(0), y1:m.t, y2:H-m.b, stroke:"var(--line)", "stroke-width":"1.4"}, svg);
+    el("text", {x:X(t), y:H-m.b+20, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, o.xfmt ? o.xfmt(t) : fmt(t, 0));
+  });
+  if (o.xlabel) el("text", {x:W-m.r, y:H-4, "text-anchor":"end", "font-size":"12", fill:"var(--muted)", "font-family":"var(--sans)"}, svg, o.xlabel);
+  return {X, Y, svg};
+}
+function line(c, pts, attrs){
+  el("path", Object.assign({d:"M" + pts.map(p => c.X(p[0]).toFixed(1)+","+c.Y(p[1]).toFixed(1)).join(" L"), fill:"none", "stroke-linejoin":"round", "stroke-linecap":"round"}, attrs), c.svg);
+}
+function dot(c, x, y, r, fill){ el("circle", {cx:c.X(x), cy:c.Y(y), r, fill, stroke:"var(--paper)", "stroke-width":"2"}, c.svg); }
+function label(c, x, y, txt, dx, dy, anchor, col){
+  el("text", {x:c.X(x)+dx, y:c.Y(y)+dy, "text-anchor":anchor||"start", "font-family":"var(--sans)", "font-size":"13", "font-weight":"600", fill:col||"var(--ink)"}, c.svg, txt);
+}
+
+
+/* ---------- dados das reproduções em NumPy ---------- */
+const SWEEP = [[-3.0,22.8976],[-2.997,26.2729],[-2.994,31.2344],[-2.991,26.1836],[-2.988,29.2367],[-2.985,25.0338],[-2.982,24.5691],[-2.979,29.0545],[-2.976,27.7859],[-2.973,27.2299],[-2.97,30.5315],[-2.967,28.7453],[-2.964,27.8776],[-2.961,26.3857],[-2.958,32.8756],[-2.955,22.9123],[-2.952,31.2204],[-2.9489,27.2401],[-2.9459,28.2867],[-2.9429,25.725],[-2.9399,29.3441],[-2.9369,33.6535],[-2.9339,26.2503],[-2.9309,29.5703],[-2.9279,28.9044],[-2.9249,25.0623],[-2.9219,29.2861],[-2.9189,28.9573],[-2.9159,29.6468],[-2.9129,28.4732],[-2.9099,22.3885],[-2.9069,28.1014],[-2.9039,30.4664],[-2.9009,28.2991],[-2.8979,27.5179],[-2.8949,22.3981],[-2.8919,26.5766],[-2.8889,23.5094],[-2.8859,25.8232],[-2.8829,27.7857],[-2.8799,26.4525],[-2.8769,23.9208],[-2.8739,26.2073],[-2.8709,23.2502],[-2.8679,23.616],[-2.8649,26.7837],[-2.8619,21.1427],[-2.8589,27.6139],[-2.8559,29.6414],[-2.8529,26.1432],[-2.8498,24.2315],[-2.8468,23.9318],[-2.8438,27.7615],[-2.8408,27.0512],[-2.8378,24.255],[-2.8348,23.9468],[-2.8318,25.5483],[-2.8288,28.6253],[-2.8258,25.1703],[-2.8228,23.4222],[-2.8198,25.651],[-2.8168,24.1147],[-2.8138,28.0761],[-2.8108,24.8961],[-2.8078,22.4473],[-2.8048,24.8788],[-2.8018,26.5029],[-2.7988,25.17],[-2.7958,23.6821],[-2.7928,22.0122],[-2.7898,25.1242],[-2.7868,25.117],[-2.7838,26.6078],[-2.7808,27.0883],[-2.7778,25.7812],[-2.7748,25.1496],[-2.7718,25.7014],[-2.7688,27.1003],[-2.7658,25.9863],[-2.7628,27.1061],[-2.7598,27.9797],[-2.7568,22.077],[-2.7538,29.7002],[-2.7508,23.7768],[-2.7477,21.1345],[-2.7447,23.0494],[-2.7417,24.5782],[-2.7387,22.7742],[-2.7357,23.9486],[-2.7327,26.7401],[-2.7297,26.2698],[-2.7267,25.4692],[-2.7237,26.1521],[-2.7207,22.8832],[-2.7177,20.595],[-2.7147,19.5615],[-2.7117,30.1067],[-2.7087,22.4708],[-2.7057,22.7738],[-2.7027,26.6614],[-2.6997,25.1043],[-2.6967,21.0358],[-2.6937,19.903],[-2.6907,27.0959],[-2.6877,26.2142],[-2.6847,25.7076],[-2.6817,25.1429],[-2.6787,21.777],[-2.6757,23.4238],[-2.6727,26.7108],[-2.6697,21.6928],[-2.6667,21.5212],[-2.6637,24.4767],[-2.6607,26.1625],[-2.6577,26.737],[-2.6547,25.8662],[-2.6517,22.9721],[-2.6486,22.0808],[-2.6456,26.6679],[-2.6426,23.4876],[-2.6396,21.9863],[-2.6366,24.1929],[-2.6336,22.944],[-2.6306,19.0582],[-2.6276,23.3588],[-2.6246,23.6371],[-2.6216,21.8089],[-2.6186,22.2446],[-2.6156,26.3062],[-2.6126,26.3149],[-2.6096,28.0291],[-2.6066,23.4539],[-2.6036,28.6363],[-2.6006,22.8063],[-2.5976,20.9933],[-2.5946,20.3216],[-2.5916,23.4397],[-2.5886,26.874],[-2.5856,20.3495],[-2.5826,22.0225],[-2.5796,19.8523],[-2.5766,24.9006],[-2.5736,19.9182],[-2.5706,24.3654],[-2.5676,25.663],[-2.5646,20.9359],[-2.5616,22.5451],[-2.5586,24.7725],[-2.5556,20.7752],[-2.5526,22.1867],[-2.5495,21.699],[-2.5465,25.1425],[-2.5435,23.256],[-2.5405,18.0712],[-2.5375,26.0694],[-2.5345,20.9663],[-2.5315,26.0393],[-2.5285,23.8288],[-2.5255,23.1678],[-2.5225,21.7524],[-2.5195,22.8223],[-2.5165,18.9488],[-2.5135,22.046],[-2.5105,20.2486],[-2.5075,24.2815],[-2.5045,24.466],[-2.5015,21.1758],[-2.4985,19.3804],[-2.4955,22.8279],[-2.4925,21.8038],[-2.4895,21.9936],[-2.4865,23.938],[-2.4835,20.2436],[-2.4805,20.8204],[-2.4775,21.119],[-2.4745,20.9539],[-2.4715,22.301],[-2.4685,20.8214],[-2.4655,19.4902],[-2.4625,21.7626],[-2.4595,21.1758],[-2.4565,25.8379],[-2.4535,20.9127],[-2.4505,16.9315],[-2.4474,20.1429],[-2.4444,23.6705],[-2.4414,20.9011],[-2.4384,21.5188],[-2.4354,24.4798],[-2.4324,18.5494],[-2.4294,16.4883],[-2.4264,17.3151],[-2.4234,16.2513],[-2.4204,25.4206],[-2.4174,23.3064],[-2.4144,22.4578],[-2.4114,19.6908],[-2.4084,21.3038],[-2.4054,24.615],[-2.4024,23.9094],[-2.3994,23.3561],[-2.3964,19.3096],[-2.3934,20.2628],[-2.3904,22.7599],[-2.3874,19.4322],[-2.3844,21.7154],[-2.3814,21.2293],[-2.3784,20.1459],[-2.3754,20.6161],[-2.3724,21.4089],[-2.3694,23.4462],[-2.3664,20.6234],[-2.3634,21.6106],[-2.3604,21.6515],[-2.3574,20.36],[-2.3544,21.7395],[-2.3514,22.188],[-2.3483,20.6503],[-2.3453,14.8878],[-2.3423,20.3616],[-2.3393,21.9702],[-2.3363,17.4838],[-2.3333,18.4501],[-2.3303,22.8124],[-2.3273,19.0863],[-2.3243,18.7211],[-2.3213,26.4287],[-2.3183,22.1717],[-2.3153,18.3611],[-2.3123,22.66],[-2.3093,17.9889],[-2.3063,20.1054],[-2.3033,22.5959],[-2.3003,20.8797],[-2.2973,19.3443],[-2.2943,20.6569],[-2.2913,17.8899],[-2.2883,20.3217],[-2.2853,20.306],[-2.2823,19.2239],[-2.2793,20.6696],[-2.2763,18.3365],[-2.2733,17.2362],[-2.2703,17.5978],[-2.2673,15.8872],[-2.2643,20.7029],[-2.2613,19.3835],[-2.2583,15.8228],[-2.2553,22.8313],[-2.2523,20.9044],[-2.2492,17.1211],[-2.2462,18.3638],[-2.2432,18.0239],[-2.2402,19.9954],[-2.2372,22.8946],[-2.2342,16.3663],[-2.2312,19.5222],[-2.2282,16.7935],[-2.2252,22.0005],[-2.2222,14.7649],[-2.2192,21.8607],[-2.2162,17.8508],[-2.2132,16.0728],[-2.2102,17.2266],[-2.2072,18.7178],[-2.2042,15.0613],[-2.2012,16.0865],[-2.1982,20.2838],[-2.1952,17.5863],[-2.1922,16.6264],[-2.1892,17.9401],[-2.1862,13.6726],[-2.1832,22.2452],[-2.1802,17.8031],[-2.1772,18.581],[-2.1742,16.5475],[-2.1712,15.7013],[-2.1682,15.1841],[-2.1652,16.0454],[-2.1622,16.85],[-2.1592,16.1412],[-2.1562,16.3839],[-2.1532,18.6289],[-2.1502,17.07],[-2.1471,14.3338],[-2.1441,18.4005],[-2.1411,15.9914],[-2.1381,16.6209],[-2.1351,14.3798],[-2.1321,17.6726],[-2.1291,16.6892],[-2.1261,16.8414],[-2.1231,17.2401],[-2.1201,21.9646],[-2.1171,16.0246],[-2.1141,17.5852],[-2.1111,17.5645],[-2.1081,17.1174],[-2.1051,20.3114],[-2.1021,17.1858],[-2.0991,15.5626],[-2.0961,15.5692],[-2.0931,14.6329],[-2.0901,15.7051],[-2.0871,22.9637],[-2.0841,17.6525],[-2.0811,15.5377],[-2.0781,16.5137],[-2.0751,17.1042],[-2.0721,14.6097],[-2.0691,21.7338],[-2.0661,13.7604],[-2.0631,15.6594],[-2.0601,17.9453],[-2.0571,17.3579],[-2.0541,16.5091],[-2.0511,14.9546],[-2.048,16.5607],[-2.045,13.3308],[-2.042,16.8729],[-2.039,15.2226],[-2.036,17.4054],[-2.033,16.7919],[-2.03,15.4825],[-2.027,15.1045],[-2.024,15.3355],[-2.021,21.7557],[-2.018,14.5512],[-2.015,9.7129],[-2.012,17.1786],[-2.009,15.1971],[-2.006,14.8337],[-2.003,19.0025],[-2.0,15.7666],[-1.997,19.2713],[-1.994,13.8679],[-1.991,15.3785],[-1.988,14.6099],[-1.985,11.2201],[-1.982,13.5769],[-1.979,14.2445],[-1.976,14.1007],[-1.973,15.2511],[-1.97,17.0326],[-1.967,14.4851],[-1.964,13.3788],[-1.961,10.8362],[-1.958,18.0932],[-1.955,11.6068],[-1.952,13.3492],[-1.9489,13.3364],[-1.9459,15.8471],[-1.9429,15.6042],[-1.9399,15.0496],[-1.9369,13.0891],[-1.9339,18.4808],[-1.9309,15.1992],[-1.9279,14.7235],[-1.9249,13.6326],[-1.9219,15.0835],[-1.9189,12.4256],[-1.9159,14.2287],[-1.9129,17.3561],[-1.9099,13.1283],[-1.9069,13.7519],[-1.9039,12.065],[-1.9009,16.4419],[-1.8979,17.7856],[-1.8949,10.953],[-1.8919,14.1129],[-1.8889,13.2284],[-1.8859,13.5844],[-1.8829,11.703],[-1.8799,14.6559],[-1.8769,14.4346],[-1.8739,14.392],[-1.8709,11.0301],[-1.8679,14.1874],[-1.8649,13.4003],[-1.8619,10.1007],[-1.8589,11.1286],[-1.8559,17.3947],[-1.8529,12.6861],[-1.8498,13.0882],[-1.8468,14.858],[-1.8438,13.1085],[-1.8408,12.0345],[-1.8378,13.3549],[-1.8348,11.5099],[-1.8318,10.8233],[-1.8288,10.7941],[-1.8258,15.6443],[-1.8228,15.2195],[-1.8198,13.651],[-1.8168,14.0749],[-1.8138,12.7845],[-1.8108,13.362],[-1.8078,12.4329],[-1.8048,16.2335],[-1.8018,14.4364],[-1.7988,13.5682],[-1.7958,8.2899],[-1.7928,12.759],[-1.7898,16.2424],[-1.7868,13.9135],[-1.7838,15.1438],[-1.7808,13.2108],[-1.7778,15.9656],[-1.7748,11.6558],[-1.7718,11.9791],[-1.7688,12.6786],[-1.7658,15.1342],[-1.7628,14.3893],[-1.7598,12.1925],[-1.7568,9.9688],[-1.7538,12.987],[-1.7508,12.3888],[-1.7477,13.5476],[-1.7447,11.1558],[-1.7417,11.7355],[-1.7387,14.3577],[-1.7357,11.0799],[-1.7327,11.4264],[-1.7297,11.79],[-1.7267,11.5792],[-1.7237,12.0868],[-1.7207,11.0714],[-1.7177,12.3416],[-1.7147,10.7295],[-1.7117,12.2635],[-1.7087,10.8113],[-1.7057,14.0671],[-1.7027,10.8046],[-1.6997,12.8539],[-1.6967,11.2792],[-1.6937,14.2475],[-1.6907,10.7041],[-1.6877,12.2622],[-1.6847,13.4495],[-1.6817,11.493],[-1.6787,10.8643],[-1.6757,11.825],[-1.6727,13.407],[-1.6697,9.386],[-1.6667,14.0822],[-1.6637,12.6088],[-1.6607,9.8773],[-1.6577,11.2247],[-1.6547,14.2566],[-1.6517,7.5251],[-1.6486,10.0229],[-1.6456,11.1145],[-1.6426,12.4111],[-1.6396,13.7959],[-1.6366,8.5368],[-1.6336,11.4104],[-1.6306,15.0904],[-1.6276,10.4716],[-1.6246,12.7491],[-1.6216,10.4602],[-1.6186,10.5278],[-1.6156,11.853],[-1.6126,6.1],[-1.6096,11.6298],[-1.6066,10.6942],[-1.6036,13.179],[-1.6006,10.554],[-1.5976,11.3323],[-1.5946,11.9125],[-1.5916,11.2789],[-1.5886,12.1361],[-1.5856,11.8752],[-1.5826,14.0112],[-1.5796,11.3646],[-1.5766,8.7749],[-1.5736,12.2502],[-1.5706,9.5704],[-1.5676,11.2796],[-1.5646,12.2343],[-1.5616,8.6464],[-1.5586,13.2424],[-1.5556,8.5682],[-1.5526,8.6597],[-1.5495,6.326],[-1.5465,11.9367],[-1.5435,10.7186],[-1.5405,10.7332],[-1.5375,8.4782],[-1.5345,11.0697],[-1.5315,12.5345],[-1.5285,11.9701],[-1.5255,10.7423],[-1.5225,8.7442],[-1.5195,7.7844],[-1.5165,11.9372],[-1.5135,13.0544],[-1.5105,10.9398],[-1.5075,8.9536],[-1.5045,10.1819],[-1.5015,10.064],[-1.4985,13.2802],[-1.4955,9.3303],[-1.4925,9.3301],[-1.4895,9.3257],[-1.4865,8.4776],[-1.4835,11.6555],[-1.4805,12.2762],[-1.4775,10.1791],[-1.4745,11.0979],[-1.4715,11.4715],[-1.4685,9.7739],[-1.4655,8.5445],[-1.4625,8.7159],[-1.4595,10.9469],[-1.4565,11.2148],[-1.4535,10.3845],[-1.4505,10.4509],[-1.4474,9.7934],[-1.4444,7.3897],[-1.4414,8.8313],[-1.4384,8.097],[-1.4354,9.0426],[-1.4324,9.9483],[-1.4294,9.2355],[-1.4264,11.0468],[-1.4234,8.9553],[-1.4204,9.3173],[-1.4174,6.7204],[-1.4144,10.0544],[-1.4114,9.0767],[-1.4084,8.2103],[-1.4054,6.2702],[-1.4024,8.3488],[-1.3994,9.3088],[-1.3964,9.4734],[-1.3934,7.4112],[-1.3904,9.0375],[-1.3874,9.2276],[-1.3844,9.6551],[-1.3814,8.8255],[-1.3784,10.6363],[-1.3754,7.022],[-1.3724,7.9334],[-1.3694,8.8648],[-1.3664,7.8903],[-1.3634,11.1148],[-1.3604,8.5125],[-1.3574,8.0853],[-1.3544,8.4755],[-1.3514,8.6885],[-1.3483,6.3724],[-1.3453,8.0651],[-1.3423,8.7708],[-1.3393,8.761],[-1.3363,7.099],[-1.3333,7.7366],[-1.3303,9.6273],[-1.3273,6.6264],[-1.3243,9.7703],[-1.3213,11.0554],[-1.3183,6.2528],[-1.3153,7.0103],[-1.3123,7.5975],[-1.3093,8.9675],[-1.3063,10.2973],[-1.3033,9.475],[-1.3003,6.6878],[-1.2973,6.9941],[-1.2943,11.4934],[-1.2913,7.7401],[-1.2883,8.9731],[-1.2853,8.6564],[-1.2823,9.7132],[-1.2793,7.5409],[-1.2763,7.7961],[-1.2733,8.9281],[-1.2703,7.4087],[-1.2673,10.5649],[-1.2643,7.3965],[-1.2613,8.5458],[-1.2583,10.0478],[-1.2553,9.5468],[-1.2523,7.9875],[-1.2492,9.359],[-1.2462,7.151],[-1.2432,7.926],[-1.2402,8.5164],[-1.2372,8.4923],[-1.2342,8.1737],[-1.2312,8.2215],[-1.2282,8.9501],[-1.2252,8.1082],[-1.2222,7.7858],[-1.2192,7.4496],[-1.2162,9.5739],[-1.2132,7.4965],[-1.2102,8.7726],[-1.2072,8.6654],[-1.2042,7.7171],[-1.2012,9.4586],[-1.1982,7.0411],[-1.1952,6.6212],[-1.1922,9.8346],[-1.1892,9.9146],[-1.1862,8.4653],[-1.1832,7.8824],[-1.1802,9.0044],[-1.1772,8.2286],[-1.1742,10.9954],[-1.1712,7.8019],[-1.1682,8.3185],[-1.1652,7.062],[-1.1622,8.1],[-1.1592,6.3507],[-1.1562,6.3377],[-1.1532,9.4106],[-1.1502,7.0936],[-1.1471,8.7225],[-1.1441,4.0207],[-1.1411,8.9619],[-1.1381,7.2361],[-1.1351,8.1576],[-1.1321,6.3913],[-1.1291,8.1008],[-1.1261,10.212],[-1.1231,7.7522],[-1.1201,10.0996],[-1.1171,9.071],[-1.1141,5.5177],[-1.1111,7.1326],[-1.1081,9.0473],[-1.1051,6.6814],[-1.1021,6.6584],[-1.0991,8.0327],[-1.0961,7.5334],[-1.0931,6.134],[-1.0901,7.1225],[-1.0871,6.0218],[-1.0841,7.1839],[-1.0811,6.8358],[-1.0781,7.5742],[-1.0751,8.6034],[-1.0721,8.0235],[-1.0691,7.792],[-1.0661,6.7958],[-1.0631,6.0084],[-1.0601,7.8651],[-1.0571,8.9319],[-1.0541,9.2532],[-1.0511,11.0475],[-1.048,8.2284],[-1.045,7.3878],[-1.042,8.5253],[-1.039,6.4824],[-1.036,9.3073],[-1.033,5.985],[-1.03,5.908],[-1.027,8.6669],[-1.024,8.2295],[-1.021,8.4774],[-1.018,6.4674],[-1.015,7.1157],[-1.012,7.3074],[-1.009,6.3102],[-1.006,5.9035],[-1.003,8.3654],[-1.0,6.6675],[-0.997,5.4881],[-0.994,5.3474],[-0.991,7.7523],[-0.988,7.4721],[-0.985,8.5566],[-0.982,7.9524],[-0.979,5.958],[-0.976,5.6147],[-0.973,8.3654],[-0.97,6.7149],[-0.967,5.5645],[-0.964,9.431],[-0.961,6.606],[-0.958,7.6011],[-0.955,8.3204],[-0.952,5.6406],[-0.9489,6.9282],[-0.9459,7.5504],[-0.9429,8.0396],[-0.9399,6.7696],[-0.9369,6.8583],[-0.9339,6.4595],[-0.9309,8.8921],[-0.9279,6.0906],[-0.9249,7.4158],[-0.9219,7.0419],[-0.9189,7.3803],[-0.9159,8.5703],[-0.9129,7.1868],[-0.9099,6.6239],[-0.9069,6.0408],[-0.9039,7.58],[-0.9009,6.1575],[-0.8979,5.2105],[-0.8949,5.6576],[-0.8919,8.132],[-0.8889,6.0165],[-0.8859,10.1193],[-0.8829,8.0122],[-0.8799,6.4671],[-0.8769,5.6768],[-0.8739,6.2676],[-0.8709,5.206],[-0.8679,7.4655],[-0.8649,5.2421],[-0.8619,7.5747],[-0.8589,4.4215],[-0.8559,7.872],[-0.8529,5.9233],[-0.8498,7.7617],[-0.8468,5.471],[-0.8438,6.7336],[-0.8408,6.0035],[-0.8378,6.3847],[-0.8348,8.055],[-0.8318,8.0975],[-0.8288,6.1685],[-0.8258,6.4807],[-0.8228,6.3493],[-0.8198,7.2172],[-0.8168,4.9992],[-0.8138,9.6588],[-0.8108,6.8164],[-0.8078,6.7163],[-0.8048,6.9747],[-0.8018,6.9091],[-0.7988,5.9561],[-0.7958,6.6993],[-0.7928,6.1694],[-0.7898,7.1014],[-0.7868,6.6948],[-0.7838,4.7737],[-0.7808,8.0098],[-0.7778,6.6158],[-0.7748,7.6595],[-0.7718,7.3181],[-0.7688,9.5628],[-0.7658,6.7934],[-0.7628,5.847],[-0.7598,9.4038],[-0.7568,6.8163],[-0.7538,7.619],[-0.7508,6.9024],[-0.7477,7.7675],[-0.7447,10.3248],[-0.7417,5.1267],[-0.7387,8.7058],[-0.7357,6.3652],[-0.7327,4.9204],[-0.7297,7.1046],[-0.7267,7.9057],[-0.7237,6.0206],[-0.7207,7.9599],[-0.7177,6.3785],[-0.7147,8.1054],[-0.7117,8.1941],[-0.7087,4.4641],[-0.7057,8.0872],[-0.7027,7.3983],[-0.6997,6.3477],[-0.6967,5.6805],[-0.6937,6.1543],[-0.6907,6.5673],[-0.6877,7.3193],[-0.6847,7.1089],[-0.6817,5.3192],[-0.6787,5.0495],[-0.6757,7.614],[-0.6727,7.078],[-0.6697,7.7886],[-0.6667,7.9774],[-0.6637,7.8114],[-0.6607,6.2635],[-0.6577,6.5706],[-0.6547,7.6364],[-0.6517,8.0557],[-0.6486,6.6144],[-0.6456,6.8597],[-0.6426,7.2217],[-0.6396,7.4588],[-0.6366,10.3702],[-0.6336,7.9366],[-0.6306,6.2238],[-0.6276,6.9504],[-0.6246,6.5591],[-0.6216,6.6781],[-0.6186,6.6381],[-0.6156,9.8073],[-0.6126,8.4471],[-0.6096,8.8397],[-0.6066,5.8805],[-0.6036,6.8103],[-0.6006,7.6074],[-0.5976,7.5018],[-0.5946,9.5555],[-0.5916,7.3041],[-0.5886,9.0673],[-0.5856,10.0757],[-0.5826,9.9418],[-0.5796,11.3378],[-0.5766,7.9666],[-0.5736,8.2795],[-0.5706,4.9614],[-0.5676,7.6573],[-0.5646,7.255],[-0.5616,8.2569],[-0.5586,7.2888],[-0.5556,8.7058],[-0.5526,7.9818],[-0.5495,8.4161],[-0.5465,9.6717],[-0.5435,7.6325],[-0.5405,8.2926],[-0.5375,6.6738],[-0.5345,7.3141],[-0.5315,8.2441],[-0.5285,10.075],[-0.5255,8.9951],[-0.5225,8.095],[-0.5195,7.1259],[-0.5165,9.8917],[-0.5135,11.1855],[-0.5105,7.6429],[-0.5075,9.0746],[-0.5045,6.9565],[-0.5015,6.9188],[-0.4985,5.2989],[-0.4955,7.7502],[-0.4925,8.0032],[-0.4895,8.3018],[-0.4865,7.4262],[-0.4835,9.073],[-0.4805,5.8407],[-0.4775,6.3253],[-0.4745,7.4653],[-0.4715,9.5418],[-0.4685,6.9862],[-0.4655,8.0139],[-0.4625,5.8434],[-0.4595,8.6786],[-0.4565,10.3682],[-0.4535,10.3071],[-0.4505,9.6737],[-0.4474,8.9605],[-0.4444,7.9539],[-0.4414,7.6792],[-0.4384,8.2543],[-0.4354,9.5698],[-0.4324,10.4082],[-0.4294,8.3667],[-0.4264,8.6698],[-0.4234,10.1078],[-0.4204,12.573],[-0.4174,8.9271],[-0.4144,10.1278],[-0.4114,9.3412],[-0.4084,6.6573],[-0.4054,5.1107],[-0.4024,8.2321],[-0.3994,7.5165],[-0.3964,9.304],[-0.3934,8.774],[-0.3904,8.4105],[-0.3874,7.7657],[-0.3844,8.8266],[-0.3814,6.375],[-0.3784,10.9829],[-0.3754,10.1688],[-0.3724,9.1952],[-0.3694,6.8982],[-0.3664,12.1961],[-0.3634,9.5456],[-0.3604,13.2405],[-0.3574,15.6385],[-0.3544,16.475],[-0.3514,8.1545],[-0.3483,9.186],[-0.3453,7.369],[-0.3423,14.715],[-0.3393,15.331],[-0.3363,10.9062],[-0.3333,13.1754],[-0.3303,9.7263],[-0.3273,12.5401],[-0.3243,9.0052],[-0.3213,11.3679],[-0.3183,11.6757],[-0.3153,10.6952],[-0.3123,13.8642],[-0.3093,13.4477],[-0.3063,13.3862],[-0.3033,19.2391],[-0.3003,15.051],[-0.2973,15.0731],[-0.2943,14.2431],[-0.2913,7.2294],[-0.2883,9.4413],[-0.2853,16.6667],[-0.2823,12.8705],[-0.2793,9.9726],[-0.2763,11.0355],[-0.2733,9.7031],[-0.2703,10.0238],[-0.2673,10.7027],[-0.2643,10.0943],[-0.2613,14.6643],[-0.2583,8.6493],[-0.2553,9.92],[-0.2523,12.4919],[-0.2492,8.7528],[-0.2462,12.5931],[-0.2432,12.3599],[-0.2402,8.506],[-0.2372,9.3032],[-0.2342,14.9069],[-0.2312,9.0118],[-0.2282,13.8329],[-0.2252,12.1732],[-0.2222,8.1616],[-0.2192,6.0677],[-0.2162,9.9057],[-0.2132,8.0567],[-0.2102,13.3188],[-0.2072,12.7377],[-0.2042,7.9537],[-0.2012,10.3752],[-0.1982,13.3884],[-0.1952,13.2338],[-0.1922,10.2581],[-0.1892,13.6286],[-0.1862,14.8407],[-0.1832,12.5624],[-0.1802,14.2064],[-0.1772,11.3492],[-0.1742,12.8852],[-0.1712,11.8602],[-0.1682,9.1858],[-0.1652,11.5089],[-0.1622,12.2342],[-0.1592,14.6224],[-0.1562,11.1589],[-0.1532,14.5018],[-0.1502,12.6631],[-0.1471,12.3081],[-0.1441,10.3248],[-0.1411,10.961],[-0.1381,9.6718],[-0.1351,10.9107],[-0.1321,11.0193],[-0.1291,9.9976],[-0.1261,11.5312],[-0.1231,11.0777],[-0.1201,14.7194],[-0.1171,9.8482],[-0.1141,12.4545],[-0.1111,9.1462],[-0.1081,8.1876],[-0.1051,14.4251],[-0.1021,12.746],[-0.0991,15.2595],[-0.0961,14.339],[-0.0931,19.2504],[-0.0901,11.1426],[-0.0871,12.8103],[-0.0841,11.3037],[-0.0811,13.8456],[-0.0781,13.7868],[-0.0751,9.7183],[-0.0721,11.8736],[-0.0691,12.7659],[-0.0661,12.0927],[-0.0631,13.6181],[-0.0601,12.2875],[-0.0571,10.0212],[-0.0541,14.8237],[-0.0511,13.4637],[-0.048,15.7568],[-0.045,11.1144],[-0.042,15.4134],[-0.039,19.5189],[-0.036,19.8003],[-0.033,13.9059],[-0.03,14.8748],[-0.027,14.0143],[-0.024,11.5852],[-0.021,20.1766],[-0.018,13.9948],[-0.015,18.5222],[-0.012,14.3791],[-0.009,11.6597],[-0.006,13.9262],[-0.003,12.9899],[0.0,15.198]];
+const CURVE = [0.7383,0.5284,0.4758,0.4465,0.4346,0.4257,0.4192,0.4174,0.4119,0.4067,0.4018,0.4031,0.3994,0.3962,0.3964,0.3939,0.3941,0.3922,0.3874,0.3891,0.387,0.3846,0.3858,0.3837,0.3829,0.3818,0.3803,0.3803,0.3796,0.3795,0.3767,0.378,0.377,0.374,0.3736,0.3748,0.3739,0.3733,0.3706,0.3711,0.3715,0.3708,0.3704,0.3675,0.3716,0.3701,0.3722,0.3675,0.3678,0.3665,0.3669,0.3658,0.3659,0.3666,0.3657,0.3637,0.3638,0.3666,0.3634,0.3634,0.3629,0.3653,0.3631,0.3647,0.3612,0.36,0.3654,0.3635,0.3636,0.3602,0.3618,0.3613,0.3588,0.3611,0.3609,0.3598,0.3605,0.3588,0.3582,0.3585,0.3591,0.358,0.36,0.3593,0.3578,0.357,0.3571,0.3567,0.357,0.3564,0.3567,0.3564,0.3565,0.3566,0.3531,0.3549,0.3572,0.3548,0.3548,0.3559,0.3322,0.3242,0.3282,0.3278,0.3274,0.3263,0.3268,0.3249,0.3247,0.3245,0.3251,0.3262,0.3212,0.324,0.3245,0.3247,0.326,0.327,0.3262,0.3235,0.3251,0.3245,0.323,0.3253,0.3261,0.3242,0.3257,0.3227,0.324,0.3238,0.3259,0.3244,0.324,0.3246,0.3241,0.3221,0.3246,0.3246,0.325,0.324,0.3212,0.325,0.3262,0.3244,0.3242,0.3227,0.3224,0.3241,0.3244,0.3219,0.3236,0.324,0.328,0.3256,0.3251,0.3254,0.3256,0.3242,0.3209,0.3241,0.3233,0.3245,0.3241,0.3243,0.3231,0.322,0.3219,0.3249,0.3221,0.3229,0.3243,0.3262,0.3236,0.3252,0.3218,0.3227,0.3247,0.3241,0.3223,0.3235,0.3258,0.3231,0.3237,0.3245,0.3227,0.3218,0.3248,0.324,0.3247,0.3237,0.3241,0.321,0.3225,0.325,0.3234,0.3237,0.3249,0.3219,0.3224,0.3239];
+const EMB2 = [[".",0.095,-0.947],["a",0.626,-0.048],["b",-0.997,-0.24],["c",-0.543,-0.253],["d",-0.663,-0.062],["e",0.671,0.27],["f",-0.766,-0.097],["g",-0.773,-0.303],["h",-0.254,-0.041],["i",0.721,0.665],["j",-0.37,0.165],["k",-0.565,-0.103],["l",-0.971,0.453],["m",-0.602,0.052],["n",-0.111,0.263],["o",0.524,0.177],["p",-0.701,-0.35],["q",-0.287,1.522],["r",-0.472,0.35],["s",-0.423,-0.261],["t",-0.594,-0.242],["u",0.869,0.329],["v",-0.93,0.096],["w",-0.631,-0.055],["x",-0.286,-0.18],["y",0.193,0.863],["z",-0.52,0.061]];
+
+/* ---------- embeddings 2D ---------- */
+(() => {
+  const c = chart("emb2", {x:[-1.2, 1.1], y:[-1.2, 1.7], xt:[-1, -0.5, 0, 0.5, 1], yt:[-1, -0.5, 0, 0.5, 1, 1.5], yd:1, zeroAxis:true, xfmt: t => fmt(t, 1)});
+  const vow = new Set(["a","e","i","o","u"]);
+  EMB2.forEach(([ch, x, y]) => {
+    const fill = ch === "." ? "var(--warn)" : vow.has(ch) ? "var(--acc)" : "var(--paper)";
+    const ink = (ch === "." || vow.has(ch)) ? "#fff" : "var(--ink)";
+    el("circle", {cx:c.X(x), cy:c.Y(y), r:11, fill, stroke: (ch === "." || vow.has(ch)) ? "none" : "var(--line-2)", "stroke-width":"1.3"}, c.svg);
+    el("text", {x:c.X(x), y:c.Y(y) + 4.5, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"13", "font-weight":"600", fill:ink}, c.svg, ch);
+  });
+})();
+
+/* ---------- varredura da taxa ---------- */
+(() => {
+  const k = 25, xs = SWEEP.map(p => p[0]), ys = SWEEP.map(p => p[1]);
+  const sm = [];
+  for (let i = 0; i + k <= ys.length; i++){ let s = 0; for (let j = i; j < i + k; j++) s += ys[j]; sm.push([xs[i + Math.floor(k/2)], s / k]); }
+  const c = chart("sweep", {x:[-3, 0], y:[0, 32], xt:[-3, -2, -1, 0], yt:[0, 10, 20, 30], xfmt: t => "10^" + (t === 0 ? "0" : fmt(t, 0)), xlabel:"expoente da taxa (lre)"});
+  SWEEP.forEach(([x, y]) => { if (y <= 32) el("circle", {cx:c.X(x), cy:c.Y(y), r:1.4, fill:"var(--line-2)"}, c.svg); });
+  line(c, sm, {stroke:"var(--acc)", "stroke-width":"2.8"});
+  let best = sm[0]; sm.forEach(p => { if (p[1] < best[1]) best = p; });
+  dot(c, best[0], best[1], 6, "var(--warn)");
+  label(c, best[0], best[1], "vale ≈ 10^−0,9", 0, 26, "middle", "var(--warn)");
+  el("line", {x1:c.X(-1), x2:c.X(-1), y1:c.Y(0), y2:c.Y(32), stroke:"var(--ok)", "stroke-dasharray":"5 4"}, c.svg);
+  label(c, -1, 30, "0,1", 6, 0, "start", "var(--ok)");
+})();
+
+/* ---------- curva de treino ---------- */
+(() => {
+  const pts = CURVE.map((v, i) => [i + 0.5, Math.pow(10, v)]);
+  const c = chart("curve", {x:[0, 200], y:[2, 5.6], xt:[0, 50, 100, 150, 200], yt:[2, 3, 4, 5], xfmt: t => t === 0 ? "0" : t + " mil", xlabel:"passo"});
+  el("rect", {x:c.X(100), y:c.Y(5.6), width:c.X(200) - c.X(100), height:c.Y(2) - c.Y(5.6), fill:"var(--acc-soft)", opacity:".5"}, c.svg);
+  label(c, 150, 5.4, "lr = 0,01", 0, 0, "middle", "var(--muted)");
+  label(c, 50, 5.4, "lr = 0,1", 0, 0, "middle", "var(--muted)");
+  line(c, pts, {stroke:"var(--acc)", "stroke-width":"2.4"});
+  const last = pts[pts.length - 1];
+  dot(c, last[0], last[1], 5, "var(--acc)");
+  label(c, last[0], last[1], fmt(last[1], 2), 0, -12, "end", "var(--acc)");
+})();
+
+/* ---------- escada de losses ---------- */
+(() => {
+  const rows = [["uniforme (chute)", 3.296, "var(--line-2)"], ["bigrama (contagem)", 2.454, "var(--muted)"], ["MLP, embedding 2D", 2.288, "var(--acc-soft)"], ["MLP, embedding 10D", 2.155, "var(--acc)"]];
+  const svg = document.getElementById("ladder"), l = 170, r = 70, t = 14, h = 62, W = 620 - l - r, mx = 3.5;
+  [0, 1, 2, 3].forEach(v => {
+    const x = l + v / mx * W;
+    el("line", {x1:x, x2:x, y1:t - 4, y2:t + rows.length*h - 8, stroke:"var(--line)"}, svg);
+    el("text", {x, y:t + rows.length*h + 10, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, v);
+  });
+  rows.forEach(([name, v, col], i) => {
+    const y = t + i*h;
+    el("text", {x:l - 12, y:y + 27, "text-anchor":"end", "font-family":"var(--sans)", "font-size":"14", fill:"var(--ink)"}, svg, name);
+    el("rect", {x:l, y:y + 8, width:v / mx * W, height:30, rx:4, fill:col, stroke: col === "var(--acc-soft)" ? "var(--acc)" : "none"}, svg);
+    el("text", {x:l + v / mx * W + 8, y:y + 28, "font-family":"var(--mono)", "font-size":"14", "font-weight":"600", fill:"var(--ink)"}, svg, fmt(v, 3));
+  });
+})();
+
+/* ---------- Q&A, copy ---------- */
+document.querySelectorAll(".q button").forEach(b => b.addEventListener("click", () => b.closest(".q").classList.add("open")));
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+  const txt = document.getElementById(b.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(txt); b.textContent = "copiado"; } catch(e) { b.textContent = "selecione e copie"; }
+  setTimeout(() => b.textContent = "copiar", 1600);
+}));
+
+/* ---------- navigation ---------- */
+const slides = [...document.querySelectorAll(".slide")];
+const KEY = "aula03-mlp-slide";
+let cur = 0;
+slides.forEach((s, i) => {
+  const f = document.createElement("div"); f.className = "foot";
+  f.innerHTML = `<span>MLP · ${s.dataset.block}</span><span>${String(i+1).padStart(2,"0")} / ${slides.length}</span>`;
+  s.appendChild(f);
+});
+function show(i){
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("on", k === cur));
+  document.getElementById("progress").style.width = ((cur+1) / slides.length * 100) + "%";
+  document.getElementById("count").textContent = (cur+1) + " / " + slides.length;
+  try { localStorage.setItem(KEY, String(cur)); } catch(e) {}
+  history.replaceState(null, "", "#" + (cur+1));
+  document.querySelectorAll(".index a").forEach((a, k) => a.classList.toggle("cur", k === cur));
+}
+function fit(){
+  const k = Math.min(window.innerWidth / 1340, (window.innerHeight - 50) / 760);
+  document.getElementById("deck").style.transform = `scale(${Math.max(0.3, k)})`;
+}
+// index
+const idx = document.getElementById("index");
+let html = `<h4>Índice</h4><div class="hint">Clique para ir · <b>I</b> ou <b>Esc</b> fecha</div>`, lastBlock = "";
+slides.forEach((s, i) => {
+  if (s.dataset.block !== lastBlock){ lastBlock = s.dataset.block; html += `<div class="grp">${lastBlock}</div>`; }
+  html += `<a data-go="${i}"><span>${String(i+1).padStart(2,"0")}</span>${s.dataset.title}</a>`;
+});
+idx.innerHTML = html;
+idx.addEventListener("click", e => { const a = e.target.closest("[data-go]"); if (a){ show(+a.dataset.go); idx.classList.remove("open"); } });
+const toggleIndex = () => idx.classList.toggle("open");
+document.getElementById("btnIndex").onclick = toggleIndex;
+document.getElementById("btnPrev").onclick = () => show(cur - 1);
+document.getElementById("btnNext").onclick = () => show(cur + 1);
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("textarea, input")) return;
+  if (["ArrowRight","PageDown"," "].includes(e.key)){ e.preventDefault(); show(cur + 1); }
+  else if (["ArrowLeft","PageUp"].includes(e.key)){ e.preventDefault(); show(cur - 1); }
+  else if (e.key === "Home") show(0);
+  else if (e.key === "End") show(slides.length - 1);
+  else if (e.key === "i" || e.key === "I") toggleIndex();
+  else if (e.key === "Escape") idx.classList.remove("open");
+});
+window.addEventListener("resize", fit);
+fit();
+let start = 0;
+const h = parseInt(location.hash.slice(1), 10);
+if (h) start = h - 1;
+else { try { start = parseInt(localStorage.getItem(KEY) || "0", 10) || 0; } catch(e) {} }
+show(start);
+</script>
+</body>
+</html>

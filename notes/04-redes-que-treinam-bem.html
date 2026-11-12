@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redes que Treinam Bem</title>
+<!--
+  Redes que Treinam Bem — material de estudo pessoal.
+  Trechos de código adaptados de Andrej Karpathy (série Neural Networks: Zero to Hero).
+  MIT License · Copyright (c) 2022 Andrej Karpathy — texto completo da licença no último slide.
+-->
+<style>
+
+
+
+
+
+
+
+
+
+
+
+:root{
+  --bg:#E9ECF1; --paper:#FFFFFF; --soft:#F4F6F9; --sunk:#E5E9EF;
+  --line:#D7DCE3; --line-2:#B9C1CC;
+  --ink:#12161C; --muted:#5B6573; --faint:#8A94A2;
+  --acc:#4652C9; --acc-soft:#E8EAFB;
+  --warn:#BE3A5A; --warn-soft:#FBE8ED;
+  --ok:#2F7A47; --ok-soft:#E1F1E6;
+  --gold:#A86F08;
+  --code-bg:#151A22; --code-ink:#DCE2EA; --code-dim:#7D8899;
+  --k:#9CA6FF; --s:#8FD6A8; --n:#F2B866; --c:#7D8899; --f:#7FD3E6; --self:#F29BB0;
+  --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+    --line:#252C37; --line-2:#3A4452;
+    --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+    --acc:#8F98F5; --acc-soft:#1D2147;
+    --warn:#F07A96; --warn-soft:#3A1A23;
+    --ok:#62C283; --ok-soft:#15291C;
+    --gold:#E5B04A;
+    --code-bg:#0B0E13;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+  --line:#252C37; --line-2:#3A4452;
+  --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+  --acc:#8F98F5; --acc-soft:#1D2147;
+  --warn:#F07A96; --warn-soft:#3A1A23;
+  --ok:#62C283; --ok-soft:#15291C;
+  --gold:#E5B04A;
+  --code-bg:#0B0E13;
+}
+*{box-sizing:border-box}
+html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; overflow:hidden}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:4px}
+
+/* ------- stage ------- */
+.viewport{position:fixed; inset:0; display:grid; place-items:center}
+.deck{position:relative; width:1280px; height:720px; transform-origin:center center; flex:none}
+.slide{position:absolute; inset:0; background:var(--paper); border-radius:14px; box-shadow:0 2px 4px rgba(0,0,0,.05), 0 30px 60px -30px rgba(0,0,0,.35);
+  padding:56px 76px 64px; display:none; flex-direction:column; overflow:hidden}
+.slide.on{display:flex}
+.progress{position:absolute; left:0; top:0; height:4px; background:var(--acc); border-radius:14px 0 0 0; transition:width .25s ease; z-index:5}
+.eyebrow{font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--acc); margin-bottom:10px}
+h1,h2,h3{font-family:var(--serif); margin:0; text-wrap:balance; letter-spacing:-.01em}
+h2{font-weight:600; font-size:38px; line-height:1.12; margin-bottom:24px}
+h3{font-weight:600; font-size:20px; margin-bottom:10px}
+p{margin:0 0 14px; font-size:19px; line-height:1.55; max-width:62ch}
+p.lead{font-size:21px; color:var(--ink)}
+.muted{color:var(--muted)}
+.small{font-size:15.5px; line-height:1.55}
+ul.clean{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+ul.clean li{font-size:18px; line-height:1.5; padding-left:22px; position:relative}
+ul.clean li::before{content:""; position:absolute; left:2px; top:.62em; width:8px; height:8px; border-radius:2px; background:var(--acc)}
+.foot{position:absolute; left:76px; right:76px; bottom:22px; display:flex; justify-content:space-between; font-size:12.5px; color:var(--faint); font-family:var(--mono)}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:44px; align-items:start; flex:1; min-height:0}
+.cols.wide-left{grid-template-columns:1.15fr .85fr}
+.cols.wide-right{grid-template-columns:.85fr 1.15fr}
+.stack{display:flex; flex-direction:column; gap:18px; min-width:0}
+code.i{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:1px 6px; border-radius:4px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* code */
+pre.code{margin:0; background:var(--code-bg); color:var(--code-ink); border-radius:10px; padding:18px 20px; font-family:var(--mono); font-size:15.5px; line-height:1.62; overflow:auto; white-space:pre; tab-size:4}
+pre.code.sm{font-size:14px; line-height:1.55; padding:16px 18px}
+pre.code .k{color:var(--k)} pre.code .s{color:var(--s)} pre.code .n{color:var(--n)}
+pre.code .c{color:var(--c); font-style:italic} pre.code .f{color:var(--f)} pre.code .self{color:var(--self)}
+
+/* boxes */
+.box{border-radius:10px; padding:16px 18px; background:var(--soft); border:1px solid var(--line)}
+.box .tag{font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px}
+.box p{font-size:16.5px; margin:0; max-width:none}
+.box p + p{margin-top:8px}
+.box.trap{background:var(--warn-soft); border-color:transparent}
+.box.trap .tag{color:var(--warn)}
+.box.key{background:var(--acc-soft); border-color:transparent}
+.box.key .tag{color:var(--acc)}
+.box.okb{background:var(--ok-soft); border-color:transparent}
+.box.okb .tag{color:var(--ok)}
+
+/* math lines */
+.eq{font-family:var(--mono); font-size:18px; line-height:1.9; font-variant-numeric:tabular-nums}
+.eq b{color:var(--acc); font-weight:500}
+.eq .r{color:var(--muted)}
+
+/* tables */
+table.t{border-collapse:collapse; width:100%; font-size:16.5px}
+table.t th{text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:0 12px 8px 0; border-bottom:1px solid var(--line-2)}
+table.t td{padding:10px 12px 10px 0; border-bottom:1px solid var(--line); vertical-align:top}
+table.t td.num{font-family:var(--mono)}
+table.t tr.hl td{background:var(--warn-soft)}
+
+/* figures */
+figure{margin:0}
+figure svg{display:block; width:100%; height:auto; overflow:visible}
+figcaption{font-size:14px; color:var(--muted); margin-top:10px; line-height:1.5}
+.reveal-btn{margin-top:14px; align-self:flex-start; border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer}
+.reveal-btn:hover{border-color:var(--acc); color:var(--acc)}
+svg .gval{opacity:0} .shown svg .gval{opacity:1} .shown svg .gq{opacity:0}
+svg .gq{fill:var(--faint)}
+
+/* cover */
+.cover{justify-content:center; padding-left:96px}
+.cover h1{font-size:76px; font-weight:600; line-height:1.02; margin:6px 0 22px; letter-spacing:-.02em}
+.cover h1 em{font-style:italic; font-weight:500; color:var(--acc)}
+.cover .lead{font-size:23px; max-width:40ch; color:var(--muted); line-height:1.45}
+.cover .meta{margin-top:40px; display:flex; gap:40px; font-size:14.5px; color:var(--muted)}
+.cover .meta b{display:block; color:var(--ink); font-weight:600; font-size:15.5px; margin-bottom:2px}
+.keys{position:absolute; left:96px; bottom:44px; font-size:13.5px; color:var(--faint)}
+.keys kbd{font-family:var(--mono); font-size:12px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--muted); background:var(--soft)}
+
+/* map */
+.steps{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:6px}
+.step{border-top:3px solid var(--acc); padding-top:12px}
+.step .n{font-family:var(--mono); font-size:13px; color:var(--acc)}
+.step b{display:block; font-family:var(--serif); font-size:19px; font-weight:600; margin:4px 0 6px; line-height:1.2}
+.step span{font-size:14.5px; color:var(--muted); line-height:1.45}
+
+/* block divider slides */
+.divider{justify-content:center}
+.divider .bn{font-family:var(--mono); font-size:15px; color:var(--acc); margin-bottom:12px}
+.divider h2{font-size:58px; margin-bottom:18px}
+.divider p{font-size:22px; color:var(--muted); max-width:46ch}
+
+/* Q&A */
+.qa{display:flex; flex-direction:column; gap:14px}
+.q{border:1px solid var(--line); border-radius:10px; padding:14px 18px; background:var(--soft)}
+.q .qt{font-size:18px; line-height:1.45; display:flex; gap:12px}
+.q .qt .qn{font-family:var(--mono); color:var(--acc); font-size:15px; padding-top:2px}
+.q button{margin-top:10px; margin-left:30px; border:0; background:none; padding:0; font-size:14px; font-weight:600; color:var(--acc); cursor:pointer}
+.q .a{display:none; margin:8px 0 0 30px; font-size:16.5px; line-height:1.5; color:var(--ink); padding-left:12px; border-left:2px solid var(--ok)}
+.q.open .a{display:block}
+.q.open button{display:none}
+
+/* checklist */
+.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+.check li{display:grid; grid-template-columns:22px 1fr; gap:12px; font-size:18px; line-height:1.45}
+.check li::before{content:""; width:18px; height:18px; border:1.5px solid var(--line-2); border-radius:5px; margin-top:3px}
+.copy{border:1px solid var(--line-2); background:var(--paper); border-radius:7px; padding:5px 11px; font-size:12.5px; font-weight:600; cursor:pointer; letter-spacing:.04em}
+.copy:hover{border-color:var(--acc); color:var(--acc)}
+
+/* chrome: nav + index */
+.nav{position:fixed; right:18px; bottom:16px; display:flex; gap:6px; z-index:20}
+.nav button{border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:6px 11px; font-size:13px; font-weight:600; cursor:pointer}
+.nav button:hover{border-color:var(--acc); color:var(--acc)}
+.nav .count{font-family:var(--mono); font-size:12.5px; color:var(--muted); padding:7px 6px}
+.index{position:fixed; top:0; left:0; bottom:0; width:380px; background:var(--paper); border-right:1px solid var(--line); z-index:30; transform:translateX(-102%); transition:transform .22s ease; overflow:auto; padding:22px 20px}
+.index.open{transform:none; box-shadow:0 0 60px rgba(0,0,0,.25)}
+.index h4{font-family:var(--serif); font-size:20px; margin:0 0 4px}
+.index .hint{font-size:12.5px; color:var(--muted); margin-bottom:16px}
+.index .grp{font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--acc); margin:16px 0 6px}
+.index a{display:grid; grid-template-columns:30px 1fr; gap:6px; padding:6px 8px; border-radius:6px; font-size:14px; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.35}
+.index a span{font-family:var(--mono); font-size:12px; color:var(--faint); padding-top:1px}
+.index a:hover{background:var(--soft)}
+.index a.cur{background:var(--acc-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>
+.flow{display:flex; align-items:stretch; gap:8px; margin:6px 0 20px}
+.flow .st{flex:1; border:1px solid var(--line); background:var(--soft); border-radius:10px; padding:11px 11px 9px}
+.flow .st b{display:block; font-family:var(--mono); font-size:13.5px; color:var(--acc); margin-bottom:4px}
+.flow .st span{font-size:13px; color:var(--muted); line-height:1.4; display:block}
+.flow .st small{display:block; font-family:var(--mono); font-size:12px; color:var(--faint); margin-top:6px}
+.flow .ar{align-self:center; color:var(--faint); font-family:var(--mono)}
+.samples{display:grid; grid-template-columns:1fr 1fr; gap:0 28px}
+.samples div{font-family:var(--mono); font-size:18px; padding:6px 0; border-bottom:1px solid var(--line)}
+.big{font-family:var(--serif); font-size:56px; font-weight:600; line-height:1; letter-spacing:-.02em}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin:4px 0 24px}
+.kpis div span{display:block; font-size:14px; color:var(--muted); margin-top:6px}
+.steps.s4{grid-template-columns:repeat(4,1fr)}
+.out{font-family:var(--mono); font-size:14.5px; line-height:1.55; background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:14px 16px; white-space:pre-wrap; color:var(--ink); margin:0}
+.toks{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 14px}
+.toks span{font-family:var(--mono); font-size:15px; padding:4px 8px; border-radius:6px; background:var(--acc-soft); white-space:pre}
+.toks span:nth-child(odd){background:var(--sunk)}
+
+</style>
+</head>
+<body>
+<div class="viewport"><div class="deck" id="deck"><div class="progress" id="progress"></div>
+
+<section class="slide cover" data-block="Abertura" data-title="Capa">
+  <div class="eyebrow">Aula 04 · Fase 1 · Semana S04</div>
+  <h1>Redes que<br><em>treinam bem</em></h1>
+  <p class="lead">Por que a mesma rede treina melhor ou pior dependendo de como começa: a loss inicial, a tanh saturada, a escala dos pesos e a BatchNorm. E como enxergar a saúde de uma rede por dentro.</p>
+  <div class="meta">
+    <div><b>Base</b>Andrej Karpathy · makemore, parte 3</div>
+    <div><b>Código</b>lectures/makemore · bn.ipynb</div>
+    <div><b>Duração de revisão</b>~25 minutos</div>
+  </div>
+  <div class="keys"><kbd>←</kbd> <kbd>→</kbd> navegar · <kbd>I</kbd> índice · as perguntas escondem a resposta até você clicar</div>
+</section>
+
+<section class="slide" data-block="Abertura" data-title="O mapa da aula">
+  <div class="eyebrow">O mapa da aula</div>
+  <h2>Cinco problemas de inicialização, cinco consertos</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><b>A loss inicial</b><span>Ela já diz se a rede começou errada.</span></div>
+    <div class="step"><div class="n">2</div><b>tanh saturada</b><span>Neurônios que não aprendem porque o gradiente some.</span></div>
+    <div class="step"><div class="n">3</div><b>A escala certa</b><span>Kaiming: dividir pelos fan-in e multiplicar pelo ganho.</span></div>
+    <div class="step"><div class="n">4</div><b>BatchNorm</b><span>Forçar as ativações a ficarem bem comportadas.</span></div>
+    <div class="step"><div class="n">5</div><b>Diagnóstico</b><span>Os gráficos que mostram se uma rede profunda está saudável.</span></div>
+  </div>
+  <div class="box key" style="margin-top:34px">
+    <div class="tag">Ao final você deve conseguir</div>
+    <p>Prever a loss inicial correta · detectar saturação da tanh · inicializar com Kaiming · implementar BatchNorm com estatísticas de treino e inferência · ler histogramas de ativação e a razão atualização/dados.</p>
+  </div>
+</section>
+
+<section class="slide divider" data-block="1 · Loss inicial" data-title="Bloco 1">
+  <div class="bn">Bloco 1 de 5</div>
+  <h2>A loss inicial</h2>
+  <p>Antes de treinar, você já sabe qual número esperar. Se ele estiver muito diferente, algo está errado.</p>
+</section>
+
+<section class="slide" data-block="1 · Loss inicial" data-title="A loss que se espera no início">
+  <div class="eyebrow">Bloco 1 · Loss inicial</div>
+  <h2>No início, a rede deveria estar em dúvida</h2>
+  <div class="kpis">
+    <div><div class="big num" style="color:var(--ok)">3,30</div><span>esperado: <span class="num">−ln(1/27)</span>, todas as letras igualmente prováveis</span></div>
+    <div><div class="big num" style="color:var(--warn)">29,0</div><span>pesos sem escala: logits enormes, confiantes e errados</span></div>
+    <div><div class="big num" style="color:var(--acc)">3,30</div><span>com <code class="i">W2 * 0.01</code> e <code class="i">b2 * 0</code></span></div>
+  </div>
+  <div class="cols">
+<pre class="code sm" data-py>W2 = torch.randn((n_hidden, vocab_size), generator=g) * 0.01
+b2 = torch.randn(vocab_size, generator=g) * 0</pre>
+    <div class="stack">
+      <p class="small">Com logits grandes, a softmax dá quase 100% para uma letra qualquer. Quando ela está errada, a loss explode. Os primeiros milhares de passos são gastos só desfazendo essa confiança: a curva em forma de "taco de hóquei" da Aula 03.</p>
+      <p class="small muted">Os valores 29,0 e 3,30 do meio e da direita vêm de uma reprodução em NumPy, no conjunto de treino inteiro.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="2 · tanh saturada" data-title="Bloco 2">
+  <div class="bn">Bloco 2 de 5</div>
+  <h2>tanh saturada</h2>
+  <p>Mesmo com a loss inicial certa, a camada escondida pode estar quebrada por dentro.</p>
+</section>
+
+<section class="slide" data-block="2 · tanh saturada" data-title="O gradiente que some">
+  <div class="eyebrow">Bloco 2 · tanh saturada</div>
+  <h2>Quando a tanh satura, o gradiente desaparece</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>A derivada local da tanh é <span class="num">1 − t²</span> (Aula 01). Se a saída <span class="num">t</span> está perto de <span class="num">±1</span>, a derivada é quase zero, e o gradiente que chega naquele neurônio é <b>multiplicado por quase zero</b>.</p>
+      <p>Com pesos <code class="i">W1</code> e <code class="i">b1</code> sem escala, a pré-ativação tem desvio-padrão perto de <span class="num">4,9</span>: a maior parte dos valores cai na parte plana da curva.</p>
+      <div class="box trap"><div class="tag">Neurônio morto</div><p>Se um neurônio está saturado para <b>todos</b> os exemplos, ele nunca recebe gradiente e nunca aprende. Karpathy encontra esses neurônios procurando colunas inteiras com <code class="i">|h| &gt; 0,99</code>.</p></div>
+    </div>
+    <figure><svg id="satBars" viewBox="0 0 540 300" role="img" aria-label="Porcentagem de saídas da tanh saturadas para três inicializações"></svg>
+      <figcaption>Fração das saídas da tanh com <span class="num">|t| &gt; 0,99</span>, em 1.000 exemplos reais. Minha reprodução em NumPy.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide divider" data-block="3 · Escala" data-title="Bloco 3">
+  <div class="bn">Bloco 3 de 5</div>
+  <h2>A escala certa</h2>
+  <p>Trocar o chute "0,2" por uma regra: Kaiming.</p>
+</section>
+
+<section class="slide" data-block="3 · Escala" data-title="Multiplicar muda a escala">
+  <div class="eyebrow">Bloco 3 · Escala</div>
+  <h2>Cada multiplicação de matriz muda a escala</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code" data-py>x = torch.randn(1000, 10)
+w = torch.randn(10, 200)
+y = x @ w                     # y.std() ≈ 3,09
+
+w = torch.randn(10, 200) / 10**0.5
+y = x @ w                     # y.std() ≈ 0,98</pre>
+      <p>Cada saída soma 10 produtos de variância 1, então a variância vira 10 e o desvio-padrão vira <span class="num">√10 ≈ 3,16</span>. Dividindo os pesos por <span class="num">√fan_in</span>, a escala se mantém em 1.</p>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">Inicialização de Kaiming</div><p><span class="num">std(W) = ganho / √fan_in</span>. O ganho compensa o quanto a não linearidade "encolhe" o sinal: para tanh, <span class="num">5/3</span>; para ReLU, <span class="num">√2</span>.</p></div>
+<pre class="code sm" data-py>W1 = torch.randn((30, 200), generator=g) * (5/3) / 30**0.5
+# no PyTorch: torch.nn.init.kaiming_normal_</pre>
+      <p class="small muted">Valores 3,09 e 0,98 da minha reprodução. O nome vem de Kaiming He, autor do artigo que analisou essas escalas.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Escala" data-title="Redes profundas e o ganho">
+  <div class="eyebrow">Bloco 3 · Escala</div>
+  <h2>Em cinco camadas, o ganho decide tudo</h2>
+  <div class="cols wide-left">
+    <figure><svg id="deep" viewBox="0 0 620 360" role="img" aria-label="Desvio-padrão da saída da tanh por camada para diferentes ganhos"></svg>
+      <figcaption>Desvio-padrão da saída da tanh em cada uma de 5 camadas (100 neurônios), com 2.000 exemplos reais e pesos <span class="num">ganho / √fan_in</span>. Minha reprodução em NumPy.</figcaption></figure>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Ganho</th><th>Camada 5</th><th>Saturação</th></tr></thead>
+        <tbody id="deepTable"></tbody>
+      </table>
+      <p class="small"><b>Ganho baixo</b>: o sinal encolhe camada a camada até sumir. <b>Ganho alto</b>: 40% das saídas saturam. <b>5/3</b> fica estável. A <b>BatchNorm</b> estabiliza sem precisar acertar o ganho.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="4 · BatchNorm" data-title="Bloco 4">
+  <div class="bn">Bloco 4 de 5</div>
+  <h2>BatchNorm</h2>
+  <p>Se queremos pré-ativações com média 0 e desvio 1, por que não simplesmente normalizá-las?</p>
+</section>
+
+<section class="slide" data-block="4 · BatchNorm" data-title="A ideia da BatchNorm">
+  <div class="eyebrow">Bloco 4 · BatchNorm</div>
+  <h2>Normalizar a pré-ativação dentro do batch</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>hpreact = embcat @ W1                     # sem b1: veja ao lado
+
+bnmeani = hpreact.mean(0, keepdim=True)   # média de cada neurônio no batch
+bnstdi  = hpreact.std(0, keepdim=True)
+hpreact = bngain * (hpreact - bnmeani) / bnstdi + bnbias
+
+with torch.no_grad():                      # para usar na inferência
+    bnmean_running = 0.999 * bnmean_running + 0.001 * bnmeani
+    bnstd_running  = 0.999 * bnstd_running  + 0.001 * bnstdi</pre>
+    <div class="stack">
+      <p>Cada neurônio é normalizado com a média e o desvio <b>do batch atual</b>. Isso é diferenciável, então o backprop passa por ela normalmente.</p>
+      <p><code class="i">bngain</code> e <code class="i">bnbias</code> são aprendidos: a rede pode desfazer a normalização onde for útil.</p>
+      <div class="box key"><div class="tag">O viés antes da BN é inútil</div><p>Qualquer viés somado antes é subtraído junto com a média. Por isso <code class="i">b1</code> sai; o <code class="i">bnbias</code> faz o papel dele.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · BatchNorm" data-title="Treino e inferência">
+  <div class="eyebrow">Bloco 4 · BatchNorm</div>
+  <h2>Os efeitos colaterais da BatchNorm</h2>
+  <div class="cols">
+    <div class="stack">
+      <div class="box key"><div class="tag">Os exemplos ficam acoplados</div><p>A saída de um exemplo passa a depender dos outros 31 do batch. Isso adiciona um pequeno ruído que, por acaso, funciona como <b>regularização</b>.</p></div>
+      <div class="box key"><div class="tag">Inferência precisa de estatísticas fixas</div><p>Para prever um único exemplo não há batch. Usa-se a média e o desvio acumulados no treino: as <b>running stats</b>, atualizadas por média móvel sem gradiente.</p></div>
+    </div>
+    <div class="stack">
+      <div class="box trap"><div class="tag">Armadilha clássica</div><p>Esquecer de pôr a rede em modo de avaliação (<code class="i">layer.training = False</code>, ou <code class="i">model.eval()</code> no PyTorch). A rede passa a normalizar com as estatísticas do batch de teste, e os números mudam com o tamanho do batch.</p></div>
+      <p class="small">No notebook, a conta da BN com estatísticas fixas dá treino <span class="num">2,0674</span> e validação <span class="num">2,1057</span>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · BatchNorm" data-title="O placar">
+  <div class="eyebrow">Bloco 4 · BatchNorm</div>
+  <h2>O placar dos consertos</h2>
+  <div class="cols wide-left">
+    <figure><svg id="logBars" viewBox="0 0 620 300" role="img" aria-label="Loss de validação após cada conserto"></svg>
+      <figcaption>Loss de validação registrada no notebook depois de cada mudança.</figcaption></figure>
+    <div class="stack">
+      <p>Corrigir a confiança inicial e a saturação já vale <span class="num">0,07</span>. Kaiming empata com o ajuste manual, mas é uma regra, não um chute. A BatchNorm não melhora este modelo raso.</p>
+      <div class="box key"><div class="tag">Por que usar BN, então?</div><p>Numa rede rasa, uma boa inicialização basta. Numa rede profunda é quase impossível acertar todos os ganhos à mão, e é aí que a BN paga a conta.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="5 · Diagnóstico" data-title="Bloco 5">
+  <div class="bn">Bloco 5 de 5</div>
+  <h2>Diagnóstico de redes profundas</h2>
+  <p>Organizar o código em camadas e olhar estatísticas de cada uma enquanto treina.</p>
+</section>
+
+<section class="slide" data-block="5 · Diagnóstico" data-title="Camadas como no PyTorch">
+  <div class="eyebrow">Bloco 5 · Diagnóstico</div>
+  <h2>Camadas com a mesma API do torch.nn</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>class Linear:
+    def __init__(self, fan_in, fan_out, bias=True):
+        self.weight = torch.randn((fan_in, fan_out), generator=g) / fan_in**0.5
+        self.bias = torch.zeros(fan_out) if bias else None
+    def __call__(self, x):
+        self.out = x @ self.weight
+        if self.bias is not None:
+            self.out += self.bias
+        return self.out
+    def parameters(self):
+        return [self.weight] + ([] if self.bias is None else [self.bias])
+
+layers = [
+  Linear(30, 100, bias=False), BatchNorm1d(100), Tanh(),
+  Linear(100, 100, bias=False), BatchNorm1d(100), Tanh(),
+  # ... mais 3 blocos iguais ...
+  Linear(100, 27, bias=False), BatchNorm1d(27),
+]   # 47.024 parâmetros</pre>
+    <div class="stack">
+      <p>Cada camada guarda sua saída em <code class="i">self.out</code>. Isso não é necessário para treinar, mas permite olhar dentro da rede depois de cada passo.</p>
+      <p class="small">As classes <code class="i">Linear</code>, <code class="i">BatchNorm1d</code> e <code class="i">Tanh</code> espelham <code class="i">nn.Linear</code>, <code class="i">nn.BatchNorm1d</code> e <code class="i">nn.Tanh</code>. Ao migrar para o PyTorch de verdade, quase nada muda.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Diagnóstico" data-title="Os quatro gráficos">
+  <div class="eyebrow">Bloco 5 · Diagnóstico</div>
+  <h2>Quatro gráficos que mostram a saúde da rede</h2>
+  <table class="t">
+    <thead><tr><th>Gráfico</th><th>O que mede</th><th>Saudável</th><th>Problema</th></tr></thead>
+    <tbody>
+      <tr><td><b>Ativações</b></td><td>histograma da saída de cada tanh</td><td>desvio ~0,65, saturação de poucos %</td><td>tudo em ±1 (saturou) ou perto de 0 (encolheu)</td></tr>
+      <tr><td><b>Gradientes das ativações</b></td><td>histograma de <code class="i">layer.out.grad</code></td><td>camadas com escalas parecidas</td><td>some nas primeiras camadas ou explode</td></tr>
+      <tr><td><b>Gradiente : dado</b></td><td><code class="i">grad.std() / p.std()</code> de cada peso</td><td>ordens de grandeza parecidas</td><td>uma camada aprende muito mais rápido que as outras</td></tr>
+      <tr><td><b>Atualização : dado</b></td><td><code class="i">(lr * grad).std() / p.std()</code>, em log10</td><td>perto de <span class="num">−3</span> (1/1000 por passo)</td><td>muito abaixo: lr baixa · muito acima: lr alta</td></tr>
+    </tbody>
+  </table>
+  <div class="box key" style="margin-top:16px"><div class="tag">O hábito</div><p>No notebook, a rede de 5 camadas com BN mostra desvio de <span class="num">0,63</span> a <span class="num">0,65</span> em todas as tanh e saturação abaixo de <span class="num">3%</span>. É esse retrato que você quer ver antes de gastar horas treinando.</p></div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="A aula em seis linhas">
+  <div class="eyebrow">Fechamento</div>
+  <h2>A aula em seis linhas</h2>
+  <ul class="clean" style="gap:16px">
+    <li><b>Loss inicial</b> deve ser <span class="num">−ln(1/27) ≈ 3,30</span>. Muito acima: logits confiantes demais → encolha a última camada.</li>
+    <li><b>tanh saturada</b> mata o gradiente (<span class="num">1 − t²</span> ≈ 0). Olhe a fração de <span class="num">|h| &gt; 0,99</span>.</li>
+    <li><b>Escala</b>: multiplicar por uma matriz multiplica o desvio por <span class="num">√fan_in</span>.</li>
+    <li><b>Kaiming</b>: <span class="num">std = ganho / √fan_in</span>, ganho <span class="num">5/3</span> para tanh.</li>
+    <li><b>BatchNorm</b> normaliza por batch, aprende ganho e viés, e usa running stats na inferência.</li>
+    <li><b>Diagnóstico</b>: ativações, gradientes, gradiente:dado e atualização:dado (≈ <span class="num">10⁻³</span>).</li>
+  </ul>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 1">
+  <div class="eyebrow">Pare e responda · 1 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">1</span><span>Qual deveria ser a loss no primeiro passo de um modelo com 27 classes? Por quê?</span></div>
+      <button>ver resposta</button><div class="a"><span class="num">−ln(1/27) ≈ 3,30</span>. Sem ter aprendido nada, a rede deveria dar a mesma probabilidade para todas as letras.</div></div>
+    <div class="q"><div class="qt"><span class="qn">2</span><span>Por que uma tanh saturada impede o aprendizado?</span></div>
+      <button>ver resposta</button><div class="a">A derivada local é <span class="num">1 − t²</span>. Com <span class="num">t ≈ ±1</span> ela é quase zero, e o gradiente que passa pelo neurônio some. Se ele satura para todos os exemplos, nunca aprende.</div></div>
+    <div class="q"><div class="qt"><span class="qn">3</span><span>Qual desvio-padrão usar nos pesos de uma camada tanh com 30 entradas?</span></div>
+      <button>ver resposta</button><div class="a"><span class="num">(5/3) / √30 ≈ 0,30</span>: o ganho da tanh dividido pela raiz do fan-in.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 2">
+  <div class="eyebrow">Pare e responda · 2 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">4</span><span>Por que a camada linear antes de uma BatchNorm não precisa de viés?</span></div>
+      <button>ver resposta</button><div class="a">A BN subtrai a média do batch, e o viés é subtraído junto. O <code class="i">bnbias</code> aprendido faz o papel dele.</div></div>
+    <div class="q"><div class="qt"><span class="qn">5</span><span>O que a BN usa na inferência, quando não há batch?</span></div>
+      <button>ver resposta</button><div class="a">As running stats: média e desvio acumulados por média móvel durante o treino. Por isso é preciso pôr a rede em modo de avaliação.</div></div>
+    <div class="q"><div class="qt"><span class="qn">6</span><span>A razão atualização:dado de uma camada está em <span class="num">10⁻⁵</span>. O que isso indica?</span></div>
+      <button>ver resposta</button><div class="a">Os pesos mudam um centésimo do que deveriam por passo: a taxa de aprendizado está baixa demais para essa camada (o alvo é perto de <span class="num">10⁻³</span>).</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Meta da semana S04">
+  <div class="eyebrow">Meta da semana S04</div>
+  <h2>Quebre a rede de propósito e conserte</h2>
+  <div class="cols">
+    <ul class="check">
+      <li>Treinar o MLP da Aula 03 com e sem <code class="i">W2 * 0.01</code> e comparar a curva no começo.</li>
+      <li>Medir a fração de tanh saturadas com a inicialização ingênua e com Kaiming.</li>
+      <li>Implementar <code class="i">BatchNorm1d</code> com running stats e modo de avaliação.</li>
+      <li>Montar a rede de 5 camadas e gerar os quatro gráficos de diagnóstico para ganho 0,5, 1, 5/3 e 3.</li>
+    </ul>
+    <div class="stack">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <h3 style="margin:0">Para revisar com o Claude</h3>
+        <button class="copy" data-copy="promptReview">copiar</button>
+      </div>
+<pre class="code sm" id="promptReview" style="white-space:pre-wrap">Acabei a parte 3 do makemore (ativações e BatchNorm). Vou colar meu código e os quatro gráficos de diagnóstico descritos em números.
+
+Não corrija por mim. Quero que você:
+1. Leia meus números de ativação e atualização:dado e me diga qual camada está doente e por quê.
+2. Me pergunte o que acontece com a BN se eu esquecer o modo de avaliação.
+3. Me peça para prever a loss inicial antes de rodar uma variação.
+
+Meu código e números:
+&lt;cole aqui&gt;</pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Créditos">
+  <div class="eyebrow">Créditos</div>
+  <h2>De onde vem este material</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>O código é de <b>Andrej Karpathy</b>, do repositório <span class="num">karpathy/nn-zero-to-hero</span> (notebook <span class="num">lectures/makemore/makemore_part3_bn.ipynb</span>), sob licença MIT. Referências da aula: Kaiming He et al. (2015) para a inicialização e Ioffe e Szegedy (2015) para a BatchNorm.</p>
+      <p class="small muted">Os trechos foram encurtados e comentados em português. A loss inicial, a saturação, a demonstração de escala e o experimento de ganho em 5 camadas vêm de uma reprodução em NumPy. O placar de losses e as estatísticas da rede de 5 camadas com BN são saídas salvas no notebook.</p>
+    </div>
+    <div class="box" style="font-size:12.5px; color:var(--muted)">
+      <div class="tag" style="color:var(--muted)">MIT License</div>
+      <p style="font-size:12.5px">Copyright (c) 2022 Andrej Karpathy</p>
+      <p style="font-size:12px">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+      <p style="font-size:12px">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+    </div>
+  </div>
+</section>
+
+</div></div>
+<div class="nav"><button id="btnIndex" title="Índice (I)">≡ índice</button><button id="btnPrev" title="Anterior (←)">←</button><span class="count" id="count"></span><button id="btnNext" title="Próximo (→)">→</button></div>
+<aside class="index" id="index" aria-label="Índice dos slides"></aside>
+<script>
+/* ---------- syntax highlight (Python, mínimo) ---------- */
+const KW = new Set("def class return for in if else elif not and or lambda import from as while with assert is None True False pass".split(" "));
+const BI = new Set("print range len sum zip set isinstance super".split(" "));
+function esc(s){ return s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function highlight(src){
+  const re = /(#[^\n]*)|(f?'(?:[^'\\\n]|\\.)*'|f?"(?:[^"\\\n]|\\.)*")|(\b\d+(?:\.\d+)?(?:e-?\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+  let out = "", m;
+  while ((m = re.exec(src))){
+    if (m[1]) out += `<span class="c">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="s">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="n">${m[3]}</span>`;
+    else if (m[4]){
+      const w = m[4];
+      if (KW.has(w)) out += `<span class="k">${w}</span>`;
+      else if (w === "self") out += `<span class="self">${w}</span>`;
+      else if (BI.has(w) || /^__\w+__$/.test(w)) out += `<span class="f">${w}</span>`;
+      else out += w;
+    } else out += esc(m[5]);
+  }
+  return out;
+}
+document.querySelectorAll("pre[data-py]").forEach(p => { p.innerHTML = highlight(p.textContent); });
+
+/* ---------- svg helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const br = n => {
+  let s = (Math.abs(n) < 1e-12 ? 0 : n).toFixed(4).replace(/0+$/, "");
+  if (s.endsWith(".")) s += "0";
+  return s.replace(".", ",").replace("-", "−");
+};
+const fmt = (n, d) => n.toFixed(d).replace(".", ",").replace("-", "−");
+
+/* ---------- charts drawn to scale ---------- */
+function chart(svgId, o){
+  const svg = document.getElementById(svgId);
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const m = {l:52, r:20, t:16, b:40};
+  const X = v => m.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (W - m.l - m.r);
+  const Y = v => H - m.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (H - m.t - m.b);
+  o.yt.forEach(t => {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(t), y2:Y(t), stroke:"var(--line)", "stroke-width":t===0&&o.zeroAxis?"1.4":"1"}, svg);
+    el("text", {x:m.l-10, y:Y(t)+4, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, fmt(t, o.yd||0));
+  });
+  o.xt.forEach(t => {
+    if (o.zeroAxis && t === 0) el("line", {x1:X(0), x2:X(0), y1:m.t, y2:H-m.b, stroke:"var(--line)", "stroke-width":"1.4"}, svg);
+    el("text", {x:X(t), y:H-m.b+20, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, o.xfmt ? o.xfmt(t) : fmt(t, 0));
+  });
+  if (o.xlabel) el("text", {x:W-m.r, y:H-4, "text-anchor":"end", "font-size":"12", fill:"var(--muted)", "font-family":"var(--sans)"}, svg, o.xlabel);
+  return {X, Y, svg};
+}
+function line(c, pts, attrs){
+  el("path", Object.assign({d:"M" + pts.map(p => c.X(p[0]).toFixed(1)+","+c.Y(p[1]).toFixed(1)).join(" L"), fill:"none", "stroke-linejoin":"round", "stroke-linecap":"round"}, attrs), c.svg);
+}
+function dot(c, x, y, r, fill){ el("circle", {cx:c.X(x), cy:c.Y(y), r, fill, stroke:"var(--paper)", "stroke-width":"2"}, c.svg); }
+function label(c, x, y, txt, dx, dy, anchor, col){
+  el("text", {x:c.X(x)+dx, y:c.Y(y)+dy, "text-anchor":anchor||"start", "font-family":"var(--sans)", "font-size":"13", "font-weight":"600", fill:col||"var(--ink)"}, c.svg, txt);
+}
+
+const DATA = {"loss_naive":29.000729235837152,"loss_fixed":3.3022151369824138,"loss_uniform":3.295836866004329,"sat_naive":{"pre_std":4.940190813170678,"sat_pct":58.426,"dead_cols":0},"sat_hack":{"pre_std":0.9686684206758748,"sat_pct":0.777,"dead_cols":0},"sat_kaiming":{"pre_std":1.4736482484412048,"sat_pct":7.188999999999999,"dead_cols":0},"var_demo":{"x_std":0.9928051111645806,"y_std":3.0892815554014685,"y_std_scaled":0.9769166048616288},"deep":{"0.5":[[0.391,0.0],[0.188,0.0],[0.091,0.0],[0.047,0.0],[0.024,0.0]],"1":[[0.601,2.4],[0.471,0.06],[0.393,0.0],[0.354,0.0],[0.33,0.0]],"5/3":[[0.738,17.05],[0.683,9.18],[0.659,6.46],[0.659,5.84],[0.663,6.37]],"3":[[0.848,44.08],[0.839,41.05],[0.835,39.94],[0.841,40.4],[0.843,41.7]],"BN":[[0.629,3.79],[0.633,3.48],[0.635,3.32],[0.638,3.21],[0.636,3.06]]}};
+
+function hbars(id, rows, max, opts){
+  opts = opts || {};
+  const mn = opts.min || 0;
+  const svg = document.getElementById(id), W0 = +svg.getAttribute("viewBox").split(" ")[2];
+  const l = opts.left || 170, r = 80, t = 10, h = opts.h || 56, W = W0 - l - r;
+  const X = v => l + (v - mn) / (max - mn) * W;
+  (opts.ticks || []).forEach(v => {
+    el("line", {x1:X(v), x2:X(v), y1:t, y2:t + rows.length*h - 8, stroke:"var(--line)"}, svg);
+    el("text", {x:X(v), y:t + rows.length*h + 10, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, opts.tickfmt ? opts.tickfmt(v) : v);
+  });
+  rows.forEach(([name, v, col, lab], i) => {
+    const y = t + i*h, w = Math.max(2, X(v) - l);
+    el("text", {x:l - 12, y:y + h/2 + 1, "text-anchor":"end", "font-family":"var(--sans)", "font-size":"14", fill:"var(--ink)"}, svg, name);
+    el("rect", {x:l, y:y + h*0.18, width:w, height:h*0.5, rx:4, fill:col}, svg);
+    el("text", {x:l + w + 8, y:y + h/2 + 1, "font-family":"var(--mono)", "font-size":"14", "font-weight":"600", fill:"var(--ink)"}, svg, lab);
+  });
+}
+hbars("satBars", [
+  ["sem escala", DATA.sat_naive.sat_pct, "var(--warn)", fmt(DATA.sat_naive.sat_pct, 1) + "%"],
+  ["× 0,2 (ajuste manual)", DATA.sat_hack.sat_pct, "var(--acc)", fmt(DATA.sat_hack.sat_pct, 1) + "%"],
+  ["Kaiming (5/3)/√30", DATA.sat_kaiming.sat_pct, "var(--ok)", fmt(DATA.sat_kaiming.sat_pct, 1) + "%"]
+], 70, {ticks:[0, 20, 40, 60], tickfmt: v => v + "%", h:80});
+
+(() => {
+  const series = [["0.5", "0,5", "var(--line-2)"], ["1", "1", "var(--muted)"], ["5/3", "5/3", "var(--acc)"], ["3", "3", "var(--warn)"], ["BN", "BN", "var(--ok)"]];
+  const c = chart("deep", {x:[1, 5], y:[0, 1], xt:[1, 2, 3, 4, 5], yt:[0, 0.25, 0.5, 0.75, 1], yd:2, xlabel:"camada"});
+  series.forEach(([k, lab, col]) => {
+    const pts = DATA.deep[k].map((s, i) => [i + 1, s[0]]);
+    line(c, pts, {stroke:col, "stroke-width": k === "5/3" || k === "BN" ? "3" : "2"});
+    pts.forEach(p => dot(c, p[0], p[1], 3.5, col));
+    label(c, 5, pts[4][1], (k === "BN" ? "BN" : "ganho " + lab), 10, k === "BN" ? 14 : 4, "start", col);
+  });
+  const tb = document.getElementById("deepTable");
+  series.forEach(([k, lab]) => { const s = DATA.deep[k][4]; tb.insertAdjacentHTML("beforeend", `<tr><td class="num">${k === "BN" ? "1 + BN" : lab}</td><td class="num">${fmt(s[0], 3)}</td><td class="num">${fmt(s[1], 1)}%</td></tr>`); });
+})();
+
+hbars("logBars", [
+  ["original", 2.1682, "var(--line-2)", "2,168"],
+  ["softmax menos confiante", 2.13, "var(--muted)", "2,13"],
+  ["tanh sem saturar", 2.1027, "var(--acc)", "2,103"],
+  ["Kaiming", 2.1070, "var(--acc)", "2,107"],
+  ["+ BatchNorm", 2.1048, "var(--ok)", "2,105"]
+], 2.2, {min:2.0, ticks:[2.0, 2.05, 2.1, 2.15, 2.2], tickfmt: v => fmt(v, 2), left:190, h:52});
+/* ---------- Q&A, copy ---------- */
+document.querySelectorAll(".q button").forEach(b => b.addEventListener("click", () => b.closest(".q").classList.add("open")));
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+  const txt = document.getElementById(b.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(txt); b.textContent = "copiado"; } catch(e) { b.textContent = "selecione e copie"; }
+  setTimeout(() => b.textContent = "copiar", 1600);
+}));
+
+/* ---------- navigation ---------- */
+const slides = [...document.querySelectorAll(".slide")];
+const KEY = "aula04-bn-slide";
+let cur = 0;
+slides.forEach((s, i) => {
+  const f = document.createElement("div"); f.className = "foot";
+  f.innerHTML = `<span>BatchNorm · ${s.dataset.block}</span><span>${String(i+1).padStart(2,"0")} / ${slides.length}</span>`;
+  s.appendChild(f);
+});
+function show(i){
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("on", k === cur));
+  document.getElementById("progress").style.width = ((cur+1) / slides.length * 100) + "%";
+  document.getElementById("count").textContent = (cur+1) + " / " + slides.length;
+  try { localStorage.setItem(KEY, String(cur)); } catch(e) {}
+  history.replaceState(null, "", "#" + (cur+1));
+  document.querySelectorAll(".index a").forEach((a, k) => a.classList.toggle("cur", k === cur));
+}
+function fit(){
+  const k = Math.min(window.innerWidth / 1340, (window.innerHeight - 50) / 760);
+  document.getElementById("deck").style.transform = `scale(${Math.max(0.3, k)})`;
+}
+// index
+const idx = document.getElementById("index");
+let html = `<h4>Índice</h4><div class="hint">Clique para ir · <b>I</b> ou <b>Esc</b> fecha</div>`, lastBlock = "";
+slides.forEach((s, i) => {
+  if (s.dataset.block !== lastBlock){ lastBlock = s.dataset.block; html += `<div class="grp">${lastBlock}</div>`; }
+  html += `<a data-go="${i}"><span>${String(i+1).padStart(2,"0")}</span>${s.dataset.title}</a>`;
+});
+idx.innerHTML = html;
+idx.addEventListener("click", e => { const a = e.target.closest("[data-go]"); if (a){ show(+a.dataset.go); idx.classList.remove("open"); } });
+const toggleIndex = () => idx.classList.toggle("open");
+document.getElementById("btnIndex").onclick = toggleIndex;
+document.getElementById("btnPrev").onclick = () => show(cur - 1);
+document.getElementById("btnNext").onclick = () => show(cur + 1);
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("textarea, input")) return;
+  if (["ArrowRight","PageDown"," "].includes(e.key)){ e.preventDefault(); show(cur + 1); }
+  else if (["ArrowLeft","PageUp"].includes(e.key)){ e.preventDefault(); show(cur - 1); }
+  else if (e.key === "Home") show(0);
+  else if (e.key === "End") show(slides.length - 1);
+  else if (e.key === "i" || e.key === "I") toggleIndex();
+  else if (e.key === "Escape") idx.classList.remove("open");
+});
+window.addEventListener("resize", fit);
+fit();
+let start = 0;
+const h = parseInt(location.hash.slice(1), 10);
+if (h) start = h - 1;
+else { try { start = parseInt(localStorage.getItem(KEY) || "0", 10) || 0; } catch(e) {} }
+show(start);
+</script>
+</body>
+</html>

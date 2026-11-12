@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPT do Zero</title>
+<!--
+  GPT do Zero — material de estudo pessoal.
+  Trechos de código adaptados de Andrej Karpathy (série Neural Networks: Zero to Hero).
+  MIT License · Copyright (c) 2022 Andrej Karpathy — texto completo da licença no último slide.
+-->
+<style>
+
+
+
+
+
+
+
+
+
+
+
+:root{
+  --bg:#E9ECF1; --paper:#FFFFFF; --soft:#F4F6F9; --sunk:#E5E9EF;
+  --line:#D7DCE3; --line-2:#B9C1CC;
+  --ink:#12161C; --muted:#5B6573; --faint:#8A94A2;
+  --acc:#4652C9; --acc-soft:#E8EAFB;
+  --warn:#BE3A5A; --warn-soft:#FBE8ED;
+  --ok:#2F7A47; --ok-soft:#E1F1E6;
+  --gold:#A86F08;
+  --code-bg:#151A22; --code-ink:#DCE2EA; --code-dim:#7D8899;
+  --k:#9CA6FF; --s:#8FD6A8; --n:#F2B866; --c:#7D8899; --f:#7FD3E6; --self:#F29BB0;
+  --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+    --line:#252C37; --line-2:#3A4452;
+    --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+    --acc:#8F98F5; --acc-soft:#1D2147;
+    --warn:#F07A96; --warn-soft:#3A1A23;
+    --ok:#62C283; --ok-soft:#15291C;
+    --gold:#E5B04A;
+    --code-bg:#0B0E13;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#080A0E; --paper:#11151C; --soft:#161B23; --sunk:#1D232D;
+  --line:#252C37; --line-2:#3A4452;
+  --ink:#E6EAF0; --muted:#97A2B0; --faint:#6B7684;
+  --acc:#8F98F5; --acc-soft:#1D2147;
+  --warn:#F07A96; --warn-soft:#3A1A23;
+  --ok:#62C283; --ok-soft:#15291C;
+  --gold:#E5B04A;
+  --code-bg:#0B0E13;
+}
+*{box-sizing:border-box}
+html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; overflow:hidden}
+button{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:4px}
+
+/* ------- stage ------- */
+.viewport{position:fixed; inset:0; display:grid; place-items:center}
+.deck{position:relative; width:1280px; height:720px; transform-origin:center center; flex:none}
+.slide{position:absolute; inset:0; background:var(--paper); border-radius:14px; box-shadow:0 2px 4px rgba(0,0,0,.05), 0 30px 60px -30px rgba(0,0,0,.35);
+  padding:56px 76px 64px; display:none; flex-direction:column; overflow:hidden}
+.slide.on{display:flex}
+.progress{position:absolute; left:0; top:0; height:4px; background:var(--acc); border-radius:14px 0 0 0; transition:width .25s ease; z-index:5}
+.eyebrow{font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--acc); margin-bottom:10px}
+h1,h2,h3{font-family:var(--serif); margin:0; text-wrap:balance; letter-spacing:-.01em}
+h2{font-weight:600; font-size:38px; line-height:1.12; margin-bottom:24px}
+h3{font-weight:600; font-size:20px; margin-bottom:10px}
+p{margin:0 0 14px; font-size:19px; line-height:1.55; max-width:62ch}
+p.lead{font-size:21px; color:var(--ink)}
+.muted{color:var(--muted)}
+.small{font-size:15.5px; line-height:1.55}
+ul.clean{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+ul.clean li{font-size:18px; line-height:1.5; padding-left:22px; position:relative}
+ul.clean li::before{content:""; position:absolute; left:2px; top:.62em; width:8px; height:8px; border-radius:2px; background:var(--acc)}
+.foot{position:absolute; left:76px; right:76px; bottom:22px; display:flex; justify-content:space-between; font-size:12.5px; color:var(--faint); font-family:var(--mono)}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:44px; align-items:start; flex:1; min-height:0}
+.cols.wide-left{grid-template-columns:1.15fr .85fr}
+.cols.wide-right{grid-template-columns:.85fr 1.15fr}
+.stack{display:flex; flex-direction:column; gap:18px; min-width:0}
+code.i{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:1px 6px; border-radius:4px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* code */
+pre.code{margin:0; background:var(--code-bg); color:var(--code-ink); border-radius:10px; padding:18px 20px; font-family:var(--mono); font-size:15.5px; line-height:1.62; overflow:auto; white-space:pre; tab-size:4}
+pre.code.sm{font-size:14px; line-height:1.55; padding:16px 18px}
+pre.code .k{color:var(--k)} pre.code .s{color:var(--s)} pre.code .n{color:var(--n)}
+pre.code .c{color:var(--c); font-style:italic} pre.code .f{color:var(--f)} pre.code .self{color:var(--self)}
+
+/* boxes */
+.box{border-radius:10px; padding:16px 18px; background:var(--soft); border:1px solid var(--line)}
+.box .tag{font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px}
+.box p{font-size:16.5px; margin:0; max-width:none}
+.box p + p{margin-top:8px}
+.box.trap{background:var(--warn-soft); border-color:transparent}
+.box.trap .tag{color:var(--warn)}
+.box.key{background:var(--acc-soft); border-color:transparent}
+.box.key .tag{color:var(--acc)}
+.box.okb{background:var(--ok-soft); border-color:transparent}
+.box.okb .tag{color:var(--ok)}
+
+/* math lines */
+.eq{font-family:var(--mono); font-size:18px; line-height:1.9; font-variant-numeric:tabular-nums}
+.eq b{color:var(--acc); font-weight:500}
+.eq .r{color:var(--muted)}
+
+/* tables */
+table.t{border-collapse:collapse; width:100%; font-size:16.5px}
+table.t th{text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:0 12px 8px 0; border-bottom:1px solid var(--line-2)}
+table.t td{padding:10px 12px 10px 0; border-bottom:1px solid var(--line); vertical-align:top}
+table.t td.num{font-family:var(--mono)}
+table.t tr.hl td{background:var(--warn-soft)}
+
+/* figures */
+figure{margin:0}
+figure svg{display:block; width:100%; height:auto; overflow:visible}
+figcaption{font-size:14px; color:var(--muted); margin-top:10px; line-height:1.5}
+.reveal-btn{margin-top:14px; align-self:flex-start; border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer}
+.reveal-btn:hover{border-color:var(--acc); color:var(--acc)}
+svg .gval{opacity:0} .shown svg .gval{opacity:1} .shown svg .gq{opacity:0}
+svg .gq{fill:var(--faint)}
+
+/* cover */
+.cover{justify-content:center; padding-left:96px}
+.cover h1{font-size:76px; font-weight:600; line-height:1.02; margin:6px 0 22px; letter-spacing:-.02em}
+.cover h1 em{font-style:italic; font-weight:500; color:var(--acc)}
+.cover .lead{font-size:23px; max-width:40ch; color:var(--muted); line-height:1.45}
+.cover .meta{margin-top:40px; display:flex; gap:40px; font-size:14.5px; color:var(--muted)}
+.cover .meta b{display:block; color:var(--ink); font-weight:600; font-size:15.5px; margin-bottom:2px}
+.keys{position:absolute; left:96px; bottom:44px; font-size:13.5px; color:var(--faint)}
+.keys kbd{font-family:var(--mono); font-size:12px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--muted); background:var(--soft)}
+
+/* map */
+.steps{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:6px}
+.step{border-top:3px solid var(--acc); padding-top:12px}
+.step .n{font-family:var(--mono); font-size:13px; color:var(--acc)}
+.step b{display:block; font-family:var(--serif); font-size:19px; font-weight:600; margin:4px 0 6px; line-height:1.2}
+.step span{font-size:14.5px; color:var(--muted); line-height:1.45}
+
+/* block divider slides */
+.divider{justify-content:center}
+.divider .bn{font-family:var(--mono); font-size:15px; color:var(--acc); margin-bottom:12px}
+.divider h2{font-size:58px; margin-bottom:18px}
+.divider p{font-size:22px; color:var(--muted); max-width:46ch}
+
+/* Q&A */
+.qa{display:flex; flex-direction:column; gap:14px}
+.q{border:1px solid var(--line); border-radius:10px; padding:14px 18px; background:var(--soft)}
+.q .qt{font-size:18px; line-height:1.45; display:flex; gap:12px}
+.q .qt .qn{font-family:var(--mono); color:var(--acc); font-size:15px; padding-top:2px}
+.q button{margin-top:10px; margin-left:30px; border:0; background:none; padding:0; font-size:14px; font-weight:600; color:var(--acc); cursor:pointer}
+.q .a{display:none; margin:8px 0 0 30px; font-size:16.5px; line-height:1.5; color:var(--ink); padding-left:12px; border-left:2px solid var(--ok)}
+.q.open .a{display:block}
+.q.open button{display:none}
+
+/* checklist */
+.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px}
+.check li{display:grid; grid-template-columns:22px 1fr; gap:12px; font-size:18px; line-height:1.45}
+.check li::before{content:""; width:18px; height:18px; border:1.5px solid var(--line-2); border-radius:5px; margin-top:3px}
+.copy{border:1px solid var(--line-2); background:var(--paper); border-radius:7px; padding:5px 11px; font-size:12.5px; font-weight:600; cursor:pointer; letter-spacing:.04em}
+.copy:hover{border-color:var(--acc); color:var(--acc)}
+
+/* chrome: nav + index */
+.nav{position:fixed; right:18px; bottom:16px; display:flex; gap:6px; z-index:20}
+.nav button{border:1px solid var(--line-2); background:var(--paper); border-radius:8px; padding:6px 11px; font-size:13px; font-weight:600; cursor:pointer}
+.nav button:hover{border-color:var(--acc); color:var(--acc)}
+.nav .count{font-family:var(--mono); font-size:12.5px; color:var(--muted); padding:7px 6px}
+.index{position:fixed; top:0; left:0; bottom:0; width:380px; background:var(--paper); border-right:1px solid var(--line); z-index:30; transform:translateX(-102%); transition:transform .22s ease; overflow:auto; padding:22px 20px}
+.index.open{transform:none; box-shadow:0 0 60px rgba(0,0,0,.25)}
+.index h4{font-family:var(--serif); font-size:20px; margin:0 0 4px}
+.index .hint{font-size:12.5px; color:var(--muted); margin-bottom:16px}
+.index .grp{font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--acc); margin:16px 0 6px}
+.index a{display:grid; grid-template-columns:30px 1fr; gap:6px; padding:6px 8px; border-radius:6px; font-size:14px; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.35}
+.index a span{font-family:var(--mono); font-size:12px; color:var(--faint); padding-top:1px}
+.index a:hover{background:var(--soft)}
+.index a.cur{background:var(--acc-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>
+.flow{display:flex; align-items:stretch; gap:8px; margin:6px 0 20px}
+.flow .st{flex:1; border:1px solid var(--line); background:var(--soft); border-radius:10px; padding:11px 11px 9px}
+.flow .st b{display:block; font-family:var(--mono); font-size:13.5px; color:var(--acc); margin-bottom:4px}
+.flow .st span{font-size:13px; color:var(--muted); line-height:1.4; display:block}
+.flow .st small{display:block; font-family:var(--mono); font-size:12px; color:var(--faint); margin-top:6px}
+.flow .ar{align-self:center; color:var(--faint); font-family:var(--mono)}
+.samples{display:grid; grid-template-columns:1fr 1fr; gap:0 28px}
+.samples div{font-family:var(--mono); font-size:18px; padding:6px 0; border-bottom:1px solid var(--line)}
+.big{font-family:var(--serif); font-size:56px; font-weight:600; line-height:1; letter-spacing:-.02em}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin:4px 0 24px}
+.kpis div span{display:block; font-size:14px; color:var(--muted); margin-top:6px}
+.steps.s4{grid-template-columns:repeat(4,1fr)}
+.out{font-family:var(--mono); font-size:14.5px; line-height:1.55; background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:14px 16px; white-space:pre-wrap; color:var(--ink); margin:0}
+.toks{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 14px}
+.toks span{font-family:var(--mono); font-size:15px; padding:4px 8px; border-radius:6px; background:var(--acc-soft); white-space:pre}
+.toks span:nth-child(odd){background:var(--sunk)}
+
+</style>
+</head>
+<body>
+<div class="viewport"><div class="deck" id="deck"><div class="progress" id="progress"></div>
+
+<section class="slide cover" data-block="Abertura" data-title="Capa">
+  <div class="eyebrow">Aula 07 · Fase 1 · Semana S06</div>
+  <h1>GPT<br><em>do zero</em></h1>
+  <p class="lead">Do bigrama à self-attention, até um Transformer de 210 mil parâmetros que escreve algo com cara de Shakespeare. Cada peça construída e explicada: o truque da média, query/key/value, o bloco e o treino.</p>
+  <div class="meta">
+    <div><b>Base</b>Andrej Karpathy · Let's build GPT</div>
+    <div><b>Código</b>gpt_dev.ipynb</div>
+    <div><b>Duração de revisão</b>~35 minutos</div>
+  </div>
+  <div class="keys"><kbd>←</kbd> <kbd>→</kbd> navegar · <kbd>I</kbd> índice · as perguntas escondem a resposta até você clicar</div>
+</section>
+
+<section class="slide" data-block="Abertura" data-title="O mapa da aula">
+  <div class="eyebrow">O mapa da aula</div>
+  <h2>Cinco passos até o Transformer</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><b>Dados e o bigrama</b><span>Shakespeare em caracteres e a linha de base.</span></div>
+    <div class="step"><div class="n">2</div><b>O truque da média</b><span>Uma matriz triangular faz a média do passado.</span></div>
+    <div class="step"><div class="n">3</div><b>Self-attention</b><span>Pesos que dependem dos dados: query, key, value.</span></div>
+    <div class="step"><div class="n">4</div><b>O bloco Transformer</b><span>Comunicação, computação, resíduo e LayerNorm.</span></div>
+    <div class="step"><div class="n">5</div><b>Treino e resultado</b><span>De 4,41 para 1,82 e o texto gerado.</span></div>
+  </div>
+  <div class="box key" style="margin-top:34px">
+    <div class="tag">Ao final você deve conseguir</div>
+    <p>Montar batches (B, T) · explicar a máscara triangular e a softmax · escrever uma cabeça de atenção · explicar a divisão por √head_size · montar um bloco com resíduo e LayerNorm · contar os parâmetros do modelo.</p>
+  </div>
+</section>
+
+<section class="slide divider" data-block="1 · Dados" data-title="Bloco 1">
+  <div class="bn">Bloco 1 de 5</div>
+  <h2>Dados e o bigrama</h2>
+  <p>Mesma ideia do makemore, só que agora a sequência é um texto longo, não nomes curtos.</p>
+</section>
+
+<section class="slide" data-block="1 · Dados" data-title="Tiny Shakespeare">
+  <div class="eyebrow">Bloco 1 · Dados</div>
+  <h2>Um milhão de caracteres de Shakespeare</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py>chars = sorted(list(set(text)))
+vocab_size = len(chars)                 # 65
+stoi = { ch:i for i,ch in enumerate(chars) }
+itos = { i:ch for i,ch in enumerate(chars) }
+encode = lambda s: [stoi[c] for c in s]
+decode = lambda l: ''.join([itos[i] for i in l])
+
+encode("hii there")   # [46, 47, 47, 1, 58, 46, 43, 56, 43]
+
+data = torch.tensor(encode(text), dtype=torch.long)
+n = int(0.9*len(data))                  # 90% treino, 10% validação</pre>
+    </div>
+    <div class="stack">
+      <div class="kpis" style="grid-template-columns:1fr 1fr">
+        <div><div class="big num">1,12 mi</div><span>caracteres (<span class="num">1.115.394</span>)</span></div>
+        <div><div class="big num">65</div><span>símbolos: letras, pontuação, espaço e quebra de linha</span></div>
+      </div>
+      <p>O tokenizador é o mais simples possível: um caractere, um número. Vocabulário pequeno, sequências longas. Os modelos de verdade usam pedaços de palavra (a Aula 08).</p>
+      <p class="small muted">A divisão não é aleatória: os primeiros <span class="num">1.003.854</span> caracteres treinam e os últimos <span class="num">111.540</span> validam, para o texto de validação ser realmente novo.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="1 · Dados" data-title="Batches (B, T)">
+  <div class="eyebrow">Bloco 1 · Dados</div>
+  <h2>Um pedaço de 9 caracteres são 8 exemplos</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py>def get_batch(split):
+    data = train_data if split == 'train' else val_data
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([data[i:i+block_size] for i in ix])
+    y = torch.stack([data[i+1:i+block_size+1] for i in ix])
+    return x, y        # (B, T) e (B, T)</pre>
+<pre class="out">contexto [18]                    → 47
+contexto [18, 47]                → 56
+contexto [18, 47, 56]            → 57
+...
+contexto [18, 47, 56, 57, 58, 1, 15, 47] → 58</pre>
+    </div>
+    <div class="stack">
+      <p><code class="i">y</code> é <code class="i">x</code> deslocado uma posição. Assim, cada posição <span class="num">t</span> do bloco é um exemplo: prever o próximo caractere vendo do 1º até o <span class="num">t</span>-ésimo.</p>
+      <div class="box key"><div class="tag">Por que treinar todos os tamanhos de contexto</div><p>O modelo aprende a prever a partir de 1 caractere até <code class="i">block_size</code> caracteres. Na geração, ele começa com um contexto de tamanho 1 e vai crescendo.</p></div>
+      <p class="small muted">Dimensões que voltam o tempo todo: <b>B</b> (batch), <b>T</b> (tempo, posição na sequência) e <b>C</b> (canais, o tamanho do vetor).</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="1 · Dados" data-title="O bigrama como linha de base">
+  <div class="eyebrow">Bloco 1 · Dados</div>
+  <h2>O bigrama da Aula 02, agora como nn.Module</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>class BigramLanguageModel(nn.Module):
+    def __init__(self, vocab_size):
+        super().__init__()
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+
+    def forward(self, idx, targets=None):
+        logits = self.token_embedding_table(idx)   # (B, T, C)
+        if targets is None:
+            return logits, None
+        B, T, C = logits.shape
+        loss = F.cross_entropy(logits.view(B*T, C), targets.view(B*T))
+        return logits, loss
+
+optimizer = torch.optim.AdamW(m.parameters(), lr=1e-3)</pre>
+    <div class="stack">
+      <p>O embedding 65 × 65 é a tabela da Aula 02: cada caractere lê direto os logits do próximo. A loss inicial foi <span class="num">4,88</span>, perto de <span class="num">−ln(1/65) ≈ 4,17</span>.</p>
+      <div class="box trap"><div class="tag">O view antes da cross_entropy</div><p><code class="i">F.cross_entropy</code> espera <span class="num">(N, C)</span>. Com logits <span class="num">(B, T, C)</span>, é preciso juntar B e T numa dimensão só.</p></div>
+      <p class="small"><b>AdamW</b> substitui o SGD manual: ajusta o passo de cada parâmetro e é o otimizador padrão para Transformers.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="2 · Média" data-title="Bloco 2">
+  <div class="bn">Bloco 2 de 5</div>
+  <h2>O truque da média</h2>
+  <p>Para os caracteres "conversarem", cada posição precisa juntar informação das anteriores, e nunca das futuras.</p>
+</section>
+
+<section class="slide" data-block="2 · Média" data-title="Média com uma matriz">
+  <div class="eyebrow">Bloco 2 · Média</div>
+  <h2>Uma matriz triangular faz a média do passado</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py>a = torch.tril(torch.ones(3, 3))
+a = a / torch.sum(a, 1, keepdim=True)
+c = a @ b</pre>
+<pre class="out">a = [[1.00, 0.00, 0.00]     b = [[2, 7]     c = [[2.00, 7.00]
+     [0.50, 0.50, 0.00]          [6, 4]          [4.00, 5.50]
+     [0.33, 0.33, 0.33]]         [6, 5]]         [4.67, 5.33]]</pre>
+    </div>
+    <div class="stack">
+      <p>Linha <span class="num">t</span> de <code class="i">a</code> tem pesos iguais nas posições <span class="num">0…t</span> e zero no futuro. Multiplicar por <code class="i">b</code> dá, em cada linha, a média de tudo que veio até ali.</p>
+      <div class="box key"><div class="tag">A ideia que vira atenção</div><p>Uma multiplicação de matrizes é uma <b>soma ponderada</b>. Se os pesos deixarem de ser fixos e passarem a depender dos dados, temos self-attention.</p></div>
+      <p class="small muted">Valores das saídas salvas no notebook.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="2 · Média" data-title="Três versões, um resultado">
+  <div class="eyebrow">Bloco 2 · Média</div>
+  <h2>Do loop à softmax mascarada</h2>
+  <div class="cols">
+<pre class="code sm" data-py># versão 1: loop
+for t in range(T):
+    xbow[b, t] = torch.mean(x[b, :t+1], 0)
+
+# versão 2: matriz de pesos
+wei = torch.tril(torch.ones(T, T))
+wei = wei / wei.sum(1, keepdim=True)
+xbow2 = wei @ x            # (T,T) @ (B,T,C) -> (B,T,C)
+
+# versão 3: softmax
+tril = torch.tril(torch.ones(T, T))
+wei = torch.zeros((T, T))
+wei = wei.masked_fill(tril == 0, float('-inf'))
+wei = F.softmax(wei, dim=-1)
+xbow3 = wei @ x            # allclose(xbow, xbow3) -> True</pre>
+    <div class="stack">
+      <p>A versão 3 é a que importa. <code class="i">wei</code> começa em zero: afinidade igual com todo mundo. Onde é futuro vira <span class="num">−∞</span>, e a softmax transforma <span class="num">−∞</span> em peso <span class="num">0</span>.</p>
+      <div class="box key"><div class="tag">Leia assim</div><p><code class="i">wei</code> = afinidades entre posições. <code class="i">masked_fill</code> = proibir olhar o futuro. <code class="i">softmax</code> = transformar afinidades em pesos que somam 1.</p></div>
+      <p class="small muted">O <code class="i">@</code> de <span class="num">(T, T)</span> com <span class="num">(B, T, C)</span> faz broadcast no batch: a mesma matriz de pesos para cada exemplo.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="3 · Atenção" data-title="Bloco 3">
+  <div class="bn">Bloco 3 de 5</div>
+  <h2>Self-attention</h2>
+  <p>Agora as afinidades deixam de ser zero e passam a ser calculadas a partir de cada caractere.</p>
+</section>
+
+<section class="slide" data-block="3 · Atenção" data-title="Query, key, value">
+  <div class="eyebrow">Bloco 3 · Atenção</div>
+  <h2>Uma cabeça de atenção</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>head_size = 16
+key   = nn.Linear(C, head_size, bias=False)
+query = nn.Linear(C, head_size, bias=False)
+value = nn.Linear(C, head_size, bias=False)
+
+k = key(x)      # (B, T, 16)
+q = query(x)    # (B, T, 16)
+wei = q @ k.transpose(-2, -1) * head_size**-0.5   # (B, T, T)
+
+tril = torch.tril(torch.ones(T, T))
+wei = wei.masked_fill(tril == 0, float('-inf'))
+wei = F.softmax(wei, dim=-1)
+
+v = value(x)    # (B, T, 16)
+out = wei @ v   # (B, T, 16)</pre>
+    <div class="stack">
+      <ul class="clean">
+        <li><b>query</b>: o que esta posição está procurando.</li>
+        <li><b>key</b>: o que esta posição tem a oferecer.</li>
+        <li><b>value</b>: o que ela comunica se for escolhida.</li>
+      </ul>
+      <p>A afinidade entre duas posições é o produto escalar da query de uma com a key da outra. Query e key alinhadas = peso alto.</p>
+      <div class="box key"><div class="tag">Por que o value</div><p>Separar "como sou encontrado" (key) de "o que entrego" (value) dá à cabeça mais liberdade do que fazer a média do próprio <code class="i">x</code>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Atenção" data-title="Os pesos de atenção">
+  <div class="eyebrow">Bloco 3 · Atenção</div>
+  <h2>Pesos que dependem dos dados</h2>
+  <div class="cols">
+    <figure><svg id="wei" viewBox="0 0 470 420" role="img" aria-label="Matriz de pesos de atenção 8 por 8"></svg></figure>
+    <div class="stack">
+      <p>Saída real do notebook: <code class="i">wei[0]</code> de uma cabeça ainda não treinada, com <span class="num">T = 8</span>. Cada linha é uma posição olhando para trás; cada linha soma 1.</p>
+      <p>Diferente da média uniforme, os pesos não são iguais: na linha 4, <span class="num">0,79</span> do peso vai para uma única posição; na linha 7, ele se espalha por várias.</p>
+      <div class="box key"><div class="tag">Tudo acima da diagonal é zero</div><p>É a máscara triangular: nenhuma posição vê o futuro. Isso é o que faz o modelo poder gerar texto um caractere de cada vez.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Atenção" data-title="Por que dividir por √head_size">
+  <div class="eyebrow">Bloco 3 · Atenção</div>
+  <h2>Por que dividir por √head_size</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>Com q e k de variância 1, o produto escalar soma 16 termos e tem variância perto de 16. Na minha simulação: <span class="num" id="vu"></span> sem a escala e <span class="num" id="vs"></span> com ela.</p>
+      <p>Variância alta deixa a softmax "pontuda": ela converge para um one-hot e cada posição passa a olhar uma única outra. No começo do treino, isso trava o aprendizado.</p>
+      <div class="box key"><div class="tag">Atenção "escalada"</div><p><code class="i">* head_size**-0.5</code> mantém a variância em 1 e a softmax difusa. É o "scaled" de scaled dot-product attention.</p></div>
+    </div>
+    <figure><svg id="peaky" viewBox="0 0 520 330" role="img" aria-label="Softmax de um vetor original e multiplicado por 8"></svg>
+      <figcaption>Softmax de <span class="num">[0,1, −0,2, 0,3, −0,2, 0,5]</span> e do mesmo vetor × 8. Saídas salvas no notebook.</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide" data-block="3 · Atenção" data-title="O que é atenção">
+  <div class="eyebrow">Bloco 3 · Atenção</div>
+  <h2>As notas do Karpathy sobre atenção</h2>
+  <div class="cols">
+    <ul class="clean">
+      <li><b>É um mecanismo de comunicação.</b> Nós de um grafo dirigido que olham uns para os outros e agregam informação com pesos que dependem dos dados.</li>
+      <li><b>Não tem noção de espaço.</b> Atenção age sobre um conjunto de vetores. Por isso é preciso somar um <b>embedding de posição</b>.</li>
+      <li><b>Exemplos do batch não conversam.</b> Cada sequência é processada de forma independente.</li>
+    </ul>
+    <ul class="clean">
+      <li><b>Decoder vs encoder.</b> Com a máscara triangular, é um bloco de decoder (gera texto). Sem a máscara, todas as posições se veem: encoder.</li>
+      <li><b>Self vs cross.</b> Self-attention: queries, keys e values vêm do mesmo <code class="i">x</code>. Cross-attention: keys e values vêm de outra fonte, como um encoder na tradução.</li>
+      <li><b>Escalada.</b> Divide por √head_size para a softmax não saturar.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide divider" data-block="4 · Bloco" data-title="Bloco 4">
+  <div class="bn">Bloco 4 de 5</div>
+  <h2>O bloco Transformer</h2>
+  <p>Atenção sozinha comunica. Falta computar, e falta fazer uma rede profunda treinar.</p>
+</section>
+
+<section class="slide" data-block="4 · Bloco" data-title="Comunicação e computação">
+  <div class="eyebrow">Bloco 4 · Bloco</div>
+  <h2>Comunicação seguida de computação</h2>
+  <div class="cols wide-left">
+<pre class="code sm" data-py>class Block(nn.Module):
+    def __init__(self, n_embd, n_head):
+        super().__init__()
+        head_size = n_embd // n_head
+        self.sa = MultiHeadAttention(n_head, head_size)
+        self.ffwd = FeedFoward(n_embd)       # Linear(C, 4C), ReLU, Linear(4C, C)
+        self.ln1 = nn.LayerNorm(n_embd)
+        self.ln2 = nn.LayerNorm(n_embd)
+
+    def forward(self, x):
+        x = x + self.sa(self.ln1(x))         # comunicação
+        x = x + self.ffwd(self.ln2(x))       # computação
+        return x</pre>
+    <div class="stack">
+      <ul class="clean">
+        <li><b>Multi-head</b>: 4 cabeças de 16 em paralelo, concatenadas em 64. Cada uma pode buscar um tipo de relação.</li>
+        <li><b>Feed-forward</b>: cada posição "pensa" sozinha sobre o que recebeu, com uma camada 4× mais larga.</li>
+        <li><b>Resíduo</b> (<code class="i">x = x + ...</code>): um caminho direto por onde o gradiente passa sem obstáculo. É o que permite empilhar muitos blocos.</li>
+        <li><b>LayerNorm antes</b> de cada sub-bloco (pre-norm), como nos Transformers modernos.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Bloco" data-title="LayerNorm e dropout">
+  <div class="eyebrow">Bloco 4 · Bloco</div>
+  <h2>LayerNorm: a BatchNorm da Aula 04, deitada</h2>
+  <div class="cols">
+    <div class="stack">
+<pre class="code sm" data-py># BatchNorm: normaliza cada coluna (neurônio) ao longo do batch
+xmean = x.mean(0, keepdim=True)
+# LayerNorm: normaliza cada linha (exemplo) ao longo dos neurônios
+xmean = x.mean(1, keepdim=True)</pre>
+      <table class="t">
+        <thead><tr><th>Depois da LayerNorm</th><th>Média</th><th>Desvio</th></tr></thead>
+        <tbody>
+          <tr><td>uma coluna, <code class="i">x[:,0]</code></td><td class="num">0,147</td><td class="num">0,880</td></tr>
+          <tr><td>uma linha, <code class="i">x[0,:]</code></td><td class="num">0,000</td><td class="num">1,000</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">Saída salva no notebook: cada exemplo fica normalizado, as colunas não.</p>
+    </div>
+    <div class="stack">
+      <div class="box key"><div class="tag">Por que LayerNorm aqui</div><p>Ela não depende do batch: não acopla exemplos, não precisa de running stats e funciona igual no treino e na geração. Toda a dor de cabeça da BN da Aula 04 some.</p></div>
+      <div class="box key"><div class="tag">Dropout</div><p>Desliga neurônios ao acaso durante o treino, como se treinasse vários modelos menores. É regularização para quando o modelo cresce e começa a decorar.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="4 · Bloco" data-title="Os parâmetros">
+  <div class="eyebrow">Bloco 4 · Bloco</div>
+  <h2>209.729 parâmetros, contados um a um</h2>
+  <div class="cols">
+    <table class="t">
+      <thead><tr><th>Peça</th><th>Conta</th><th>Parâmetros</th></tr></thead>
+      <tbody>
+        <tr><td>Embedding de token</td><td class="num">65 × 64</td><td class="num">4.160</td></tr>
+        <tr><td>Embedding de posição</td><td class="num">32 × 64</td><td class="num">2.048</td></tr>
+        <tr><td>4 blocos</td><td class="num">4 × 49.792</td><td class="num">199.168</td></tr>
+        <tr><td>LayerNorm final</td><td class="num">2 × 64</td><td class="num">128</td></tr>
+        <tr><td>Cabeça de saída</td><td class="num">64 × 65 + 65</td><td class="num">4.225</td></tr>
+        <tr><td><b>Total</b></td><td></td><td class="num"><b>209.729</b></td></tr>
+      </tbody>
+    </table>
+    <div class="stack">
+      <p>Dentro de cada bloco: atenção (Q, K, V) <span class="num">12.288</span> · projeção <span class="num">4.160</span> · feed-forward <span class="num">33.088</span> · duas LayerNorms <span class="num">256</span>.</p>
+      <div class="box key"><div class="tag">Onde está o peso</div><p>Dois terços de cada bloco estão no feed-forward, não na atenção. Bate com o <span class="num">0,209729 M</span> que o notebook imprime.</p></div>
+      <p class="small muted">Hiperparâmetros: batch 16, contexto 32, embedding 64, 4 cabeças, 4 camadas, AdamW com taxa 10⁻³, 5.000 passos.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide divider" data-block="5 · Treino" data-title="Bloco 5">
+  <div class="bn">Bloco 5 de 5</div>
+  <h2>Treino e resultado</h2>
+  <p>Cinco mil passos de AdamW numa CPU ou numa GPU modesta.</p>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="A curva de treino">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>De 4,41 para 1,82 na validação</h2>
+  <div class="cols wide-left">
+    <figure><svg id="gptLoss" viewBox="0 0 620 360" role="img" aria-label="Loss de treino e validação ao longo de 5000 passos"></svg>
+      <figcaption>Loss estimada a cada 100 passos com 200 batches, saída salva no notebook.</figcaption></figure>
+    <div class="stack">
+      <table class="t">
+        <thead><tr><th>Passo</th><th>Treino</th><th>Validação</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td class="num">4,412</td><td class="num">4,402</td></tr>
+          <tr><td class="num">1.000</td><td class="num">2,102</td><td class="num">2,129</td></tr>
+          <tr><td class="num">4.999</td><td class="num">1,664</td><td class="num">1,823</td></tr>
+        </tbody>
+      </table>
+      <p class="small">As duas curvas descem juntas e começam a se separar no final: diferença de <span class="num">0,16</span>. O próximo passo seria mais dados ou dropout.</p>
+      <p class="small muted"><code class="i">estimate_loss()</code> faz a média de 200 batches em <code class="i">model.eval()</code> e <code class="i">torch.no_grad()</code>: a curva fica limpa, sem o ruído do minibatch.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="5 · Treino" data-title="O texto gerado">
+  <div class="eyebrow">Bloco 5 · Treino</div>
+  <h2>Parece Shakespeare de longe</h2>
+  <div class="cols">
+<pre class="out">BENVOLIO:
+To spits as stold's bewear I would and say mesby all
+on sworn make he anough
+As cousins the solle, whose be my conforeful may lie them yet
+
+GLOUCESTER:
+All the bettle dreene, for To his like thou thron!
+
+MENENIUS:
+Then, if I knom her all.
+My lord, but terruly friend</pre>
+    <div class="stack">
+      <p>Trecho da saída salva no notebook. O modelo aprendeu o formato (nome em maiúsculas, dois-pontos, versos curtos), muitas palavras reais e nomes de personagens. O sentido, não.</p>
+      <div class="box key"><div class="tag">Compare com o começo</div><p>O bigrama não treinado gerava <span class="num">SKIcLT;AcELMoTbvZv</span>. Com 210 mil parâmetros e 32 caracteres de contexto, já há estrutura.</p></div>
+      <p class="small muted">Este é só o pré-treino de um decoder. Modelos de conversa como o ChatGPT acrescentam etapas de ajuste fino e alinhamento em cima disso, com modelos milhares de vezes maiores.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="A aula em seis linhas">
+  <div class="eyebrow">Fechamento</div>
+  <h2>A aula em seis linhas</h2>
+  <ul class="clean" style="gap:16px">
+    <li><b>Dados</b>: caractere a caractere, blocos de <span class="num">T</span> que valem <span class="num">T</span> exemplos cada.</li>
+    <li><b>Média do passado</b> = matriz triangular normalizada; com <span class="num">−∞</span> e softmax, vira pesos.</li>
+    <li><b>Self-attention</b>: <span class="num">softmax(QKᵀ / √d)</span> com máscara, vezes V.</li>
+    <li><b>Atenção é comunicação</b> sem noção de espaço: precisa de embedding de posição.</li>
+    <li><b>Bloco</b>: atenção multi-head + feed-forward, cada um com resíduo e LayerNorm antes.</li>
+    <li><b>Resultado</b>: 209.729 parâmetros, validação de <span class="num">4,40</span> para <span class="num">1,82</span>.</li>
+  </ul>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 1">
+  <div class="eyebrow">Pare e responda · 1 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">1</span><span>Por que um bloco de 9 caracteres gera 8 exemplos de treino?</span></div>
+      <button>ver resposta</button><div class="a">Cada posição <span class="num">t</span> prevê o próximo caractere usando os caracteres de 1 a <span class="num">t</span>. Com 8 entradas e 8 alvos deslocados, são 8 previsões com contextos de tamanho 1 a 8.</div></div>
+    <div class="q"><div class="qt"><span class="qn">2</span><span>O que faz <code class="i">masked_fill(tril == 0, float('-inf'))</code> antes da softmax?</span></div>
+      <button>ver resposta</button><div class="a">Põe <span class="num">−∞</span> nas posições futuras. A softmax transforma <span class="num">−∞</span> em peso zero, e nenhuma posição olha para a frente.</div></div>
+    <div class="q"><div class="qt"><span class="qn">3</span><span>Qual o papel de query, key e value?</span></div>
+      <button>ver resposta</button><div class="a">A query diz o que a posição procura, a key diz o que cada posição oferece, e o produto das duas dá a afinidade. O value é o que é efetivamente somado com esses pesos.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Revisão ativa · 2">
+  <div class="eyebrow">Pare e responda · 2 de 2</div>
+  <h2>Responda antes de clicar</h2>
+  <div class="qa">
+    <div class="q"><div class="qt"><span class="qn">4</span><span>Por que dividir <code class="i">q @ k.T</code> por √head_size?</span></div>
+      <button>ver resposta</button><div class="a">Sem isso, a variância das afinidades cresce com head_size, a softmax fica pontuda (quase one-hot) e cada posição olha só uma outra. A divisão mantém a variância perto de 1.</div></div>
+    <div class="q"><div class="qt"><span class="qn">5</span><span>Para que servem as conexões residuais <code class="i">x = x + f(x)</code>?</span></div>
+      <button>ver resposta</button><div class="a">Criam um caminho direto para o gradiente: a soma distribui o gradiente sem alterá-lo (Aula 01). Assim, redes com muitos blocos continuam treináveis.</div></div>
+    <div class="q"><div class="qt"><span class="qn">6</span><span>Qual a diferença entre LayerNorm e BatchNorm?</span></div>
+      <button>ver resposta</button><div class="a">A BN normaliza cada neurônio ao longo do batch; a LN normaliza cada exemplo ao longo dos neurônios. A LN não depende do batch e não precisa de running stats.</div></div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Meta da semana S06">
+  <div class="eyebrow">Meta da semana S06</div>
+  <h2>Um mini-GPT que escreve como Machado de Assis</h2>
+  <div class="cols">
+    <ul class="check">
+      <li>Implementar uma cabeça de atenção à mão e conferir os pesos (linhas somam 1, triângulo superior zero).</li>
+      <li>Montar o bloco com multi-head, feed-forward, resíduo e LayerNorm.</li>
+      <li>Treinar em obras de Machado de Assis (domínio público), no Colab. É a meta da S06 no plano.</li>
+      <li>Registrar treino e validação, e comparar com o Shakespeare: o português gera vocabulário de caracteres maior por causa dos acentos.</li>
+    </ul>
+    <div class="stack">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <h3 style="margin:0">Para revisar com o Claude</h3>
+        <button class="copy" data-copy="promptReview">copiar</button>
+      </div>
+<pre class="code sm" id="promptReview" style="white-space:pre-wrap">Acabei o "Let's build GPT". Vou colar minha implementação da Head, do Block e o log de treino.
+
+Não corrija por mim. Quero que você:
+1. Me pergunte o shape de cada tensor dentro da Head para B=4, T=8, C=32.
+2. Me peça para explicar o que aconteceria sem a máscara e sem a divisão por √head_size.
+3. Olhe meu log de treino e me pergunte o que eu faria a seguir.
+
+Meu código e log:
+&lt;cole aqui&gt;</pre>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-block="Fechamento" data-title="Créditos">
+  <div class="eyebrow">Créditos</div>
+  <h2>De onde vem este material</h2>
+  <div class="stack" style="max-width:900px">
+    <p>O código é de <b>Andrej Karpathy</b>, do notebook <span class="num">gpt_dev.ipynb</span> que acompanha o vídeo "Let's build GPT" da série <i>Neural Networks: Zero to Hero</i>. O conjunto de dados é o Tiny Shakespeare, de <span class="num">karpathy/char-rnn</span>. A arquitetura é a de Vaswani et al., "Attention Is All You Need" (2017).</p>
+    <p class="small muted">Os trechos foram encurtados e comentados em português, para estudo pessoal. Os pesos de atenção, a demonstração da softmax, as estatísticas da LayerNorm, o log de treino e o texto gerado são saídas salvas no notebook. A simulação da variância com e sem escala é minha, em NumPy, e a contagem de parâmetros foi conferida à mão.</p>
+  </div>
+</section>
+
+</div></div>
+<div class="nav"><button id="btnIndex" title="Índice (I)">≡ índice</button><button id="btnPrev" title="Anterior (←)">←</button><span class="count" id="count"></span><button id="btnNext" title="Próximo (→)">→</button></div>
+<aside class="index" id="index" aria-label="Índice dos slides"></aside>
+<script>
+/* ---------- syntax highlight (Python, mínimo) ---------- */
+const KW = new Set("def class return for in if else elif not and or lambda import from as while with assert is None True False pass".split(" "));
+const BI = new Set("print range len sum zip set isinstance super".split(" "));
+function esc(s){ return s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function highlight(src){
+  const re = /(#[^\n]*)|(f?'(?:[^'\\\n]|\\.)*'|f?"(?:[^"\\\n]|\\.)*")|(\b\d+(?:\.\d+)?(?:e-?\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+  let out = "", m;
+  while ((m = re.exec(src))){
+    if (m[1]) out += `<span class="c">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="s">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="n">${m[3]}</span>`;
+    else if (m[4]){
+      const w = m[4];
+      if (KW.has(w)) out += `<span class="k">${w}</span>`;
+      else if (w === "self") out += `<span class="self">${w}</span>`;
+      else if (BI.has(w) || /^__\w+__$/.test(w)) out += `<span class="f">${w}</span>`;
+      else out += w;
+    } else out += esc(m[5]);
+  }
+  return out;
+}
+document.querySelectorAll("pre[data-py]").forEach(p => { p.innerHTML = highlight(p.textContent); });
+
+/* ---------- svg helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const br = n => {
+  let s = (Math.abs(n) < 1e-12 ? 0 : n).toFixed(4).replace(/0+$/, "");
+  if (s.endsWith(".")) s += "0";
+  return s.replace(".", ",").replace("-", "−");
+};
+const fmt = (n, d) => n.toFixed(d).replace(".", ",").replace("-", "−");
+
+/* ---------- charts drawn to scale ---------- */
+function chart(svgId, o){
+  const svg = document.getElementById(svgId);
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const m = {l:52, r:20, t:16, b:40};
+  const X = v => m.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (W - m.l - m.r);
+  const Y = v => H - m.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (H - m.t - m.b);
+  o.yt.forEach(t => {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(t), y2:Y(t), stroke:"var(--line)", "stroke-width":t===0&&o.zeroAxis?"1.4":"1"}, svg);
+    el("text", {x:m.l-10, y:Y(t)+4, "text-anchor":"end", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, fmt(t, o.yd||0));
+  });
+  o.xt.forEach(t => {
+    if (o.zeroAxis && t === 0) el("line", {x1:X(0), x2:X(0), y1:m.t, y2:H-m.b, stroke:"var(--line)", "stroke-width":"1.4"}, svg);
+    el("text", {x:X(t), y:H-m.b+20, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, o.xfmt ? o.xfmt(t) : fmt(t, 0));
+  });
+  if (o.xlabel) el("text", {x:W-m.r, y:H-4, "text-anchor":"end", "font-size":"12", fill:"var(--muted)", "font-family":"var(--sans)"}, svg, o.xlabel);
+  return {X, Y, svg};
+}
+function line(c, pts, attrs){
+  el("path", Object.assign({d:"M" + pts.map(p => c.X(p[0]).toFixed(1)+","+c.Y(p[1]).toFixed(1)).join(" L"), fill:"none", "stroke-linejoin":"round", "stroke-linecap":"round"}, attrs), c.svg);
+}
+function dot(c, x, y, r, fill){ el("circle", {cx:c.X(x), cy:c.Y(y), r, fill, stroke:"var(--paper)", "stroke-width":"2"}, c.svg); }
+function label(c, x, y, txt, dx, dy, anchor, col){
+  el("text", {x:c.X(x)+dx, y:c.Y(y)+dy, "text-anchor":anchor||"start", "font-family":"var(--sans)", "font-size":"13", "font-weight":"600", fill:col||"var(--ink)"}, c.svg, txt);
+}
+
+const DATA = {"var_unscaled":15.87820055278247,"var_scaled":0.9923875345489044,"n_train":1003854,"n_val":111540,"uniform_loss":4.174387269895637,"params":{"tok":4160,"pos":2048,"block":49792,"lnf":128,"head":4225,"total":209729},"log":[[0,4.4116,4.4022],[100,2.6568,2.667],[200,2.509,2.5058],[300,2.4198,2.434],[400,2.3503,2.3567],[500,2.297,2.3136],[600,2.241,2.2506],[700,2.2062,2.2198],[800,2.1638,2.1871],[900,2.1232,2.1494],[1000,2.102,2.1293],[1100,2.0704,2.1196],[1200,2.0382,2.0798],[1300,2.0249,2.064],[1400,1.9922,2.0354],[1500,1.9707,2.0308],[1600,1.9614,2.0474],[1700,1.9393,2.013],[1800,1.907,1.9943],[1900,1.9057,1.9871],[2000,1.8834,1.9954],[2100,1.8719,1.9758],[2200,1.8582,1.9623],[2300,1.8546,1.9517],[2400,1.841,1.9476],[2500,1.8167,1.9455],[2600,1.8263,1.9401],[2700,1.8108,1.934],[2800,1.804,1.9247],[2900,1.8044,1.9304],[3000,1.7963,1.9242],[3100,1.7687,1.9147],[3200,1.7547,1.9102],[3300,1.7557,1.9037],[3400,1.7547,1.8946],[3500,1.7385,1.8968],[3600,1.726,1.8914],[3700,1.7257,1.8808],[3800,1.7204,1.8919],[3900,1.7215,1.8788],[4000,1.7146,1.8639],[4100,1.7095,1.8724],[4200,1.7079,1.8707],[4300,1.7035,1.8502],[4400,1.7043,1.8693],[4500,1.6914,1.8522],[4600,1.6853,1.8357],[4700,1.6862,1.8483],[4800,1.6671,1.8434],[4900,1.6736,1.8415],[4999,1.6635,1.8226]]};
+
+document.getElementById("vu").textContent = fmt(DATA.var_unscaled, 1);
+document.getElementById("vs").textContent = fmt(DATA.var_scaled, 2);
+
+(() => {
+  const W = [[1.0,0,0,0,0,0,0,0],[0.1574,0.8426,0,0,0,0,0,0],[0.2088,0.1646,0.6266,0,0,0,0,0],[0.5792,0.1187,0.1889,0.1131,0,0,0,0],
+             [0.0294,0.1052,0.0469,0.0276,0.7909,0,0,0],[0.0176,0.2689,0.0215,0.0089,0.6812,0.0019,0,0],[0.1691,0.4066,0.0438,0.0416,0.1048,0.2012,0.0329,0],
+             [0.0210,0.0843,0.0555,0.2297,0.0573,0.0709,0.2423,0.2391]];
+  const svg = document.getElementById("wei"), l = 50, t = 30, s = 48;
+  for (let i = 0; i < 8; i++){
+    el("text", {x:l + i*s + s/2, y:t - 10, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, i);
+    el("text", {x:l - 14, y:t + i*s + s/2 + 4, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"12", fill:"var(--muted)"}, svg, i);
+    for (let j = 0; j < 8; j++){
+      const v = W[i][j];
+      el("rect", {x:l + j*s + 1, y:t + i*s + 1, width:s - 2, height:s - 2, rx:3, fill: j > i ? "var(--sunk)" : "var(--acc)", "fill-opacity": j > i ? 1 : (0.08 + 0.92*v).toFixed(3)}, svg);
+      if (j <= i) el("text", {x:l + j*s + s/2, y:t + i*s + s/2 + 4, "text-anchor":"middle", "font-family":"var(--mono)", "font-size":"11", fill: v > 0.45 ? "#fff" : "var(--ink)"}, svg, fmt(v, 2).replace(/^0/, "").replace(/^1,00$/, "1"));
+    }
+  }
+  el("text", {x:l + 4*s, y:t + 8*s + 24, "text-anchor":"middle", "font-family":"var(--sans)", "font-size":"13", fill:"var(--muted)"}, svg, "posição olhada (key) →");
+})();
+
+(() => {
+  const a = [0.1925, 0.1426, 0.2351, 0.1426, 0.2872], b = [0.0326, 0.0030, 0.1615, 0.0030, 0.8000];
+  const c = chart("peaky", {x:[-0.5, 4.5], y:[0, 1], xt:[], yt:[0, 0.25, 0.5, 0.75, 1], yd:2});
+  a.forEach((v, i) => {
+    const w = (c.X(1) - c.X(0)) * 0.34;
+    el("rect", {x:c.X(i) - w - 2, y:c.Y(v), width:w, height:c.Y(0) - c.Y(v), fill:"var(--acc)", rx:2}, c.svg);
+    el("rect", {x:c.X(i) + 2, y:c.Y(b[i]), width:w, height:c.Y(0) - c.Y(b[i]), fill:"var(--warn)", rx:2}, c.svg);
+  });
+  label(c, -0.4, 0.95, "original", 0, 0, "start", "var(--acc)");
+  label(c, -0.4, 0.86, "× 8: quase one-hot", 0, 0, "start", "var(--warn)");
+})();
+
+(() => {
+  const L = DATA.log;
+  const c = chart("gptLoss", {x:[0, 5000], y:[1.5, 4.5], xt:[0, 1000, 2000, 3000, 4000, 5000], yt:[1.5, 2, 2.5, 3, 3.5, 4, 4.5], yd:1, xfmt: t => t === 0 ? "0" : (t/1000) + " mil", xlabel:"passo"});
+  line(c, L.map(r => [r[0], r[1]]), {stroke:"var(--acc)", "stroke-width":"2.4"});
+  line(c, L.map(r => [r[0], r[2]]), {stroke:"var(--warn)", "stroke-width":"2.4"});
+  const last = L[L.length - 1];
+  label(c, last[0], last[1], "treino " + fmt(last[1], 2), 0, 20, "end", "var(--acc)");
+  label(c, last[0], last[2], "validação " + fmt(last[2], 2), 0, -12, "end", "var(--warn)");
+})();
+/* ---------- Q&A, copy ---------- */
+document.querySelectorAll(".q button").forEach(b => b.addEventListener("click", () => b.closest(".q").classList.add("open")));
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+  const txt = document.getElementById(b.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(txt); b.textContent = "copiado"; } catch(e) { b.textContent = "selecione e copie"; }
+  setTimeout(() => b.textContent = "copiar", 1600);
+}));
+
+/* ---------- navigation ---------- */
+const slides = [...document.querySelectorAll(".slide")];
+const KEY = "aula07-gpt-slide";
+let cur = 0;
+slides.forEach((s, i) => {
+  const f = document.createElement("div"); f.className = "foot";
+  f.innerHTML = `<span>GPT · ${s.dataset.block}</span><span>${String(i+1).padStart(2,"0")} / ${slides.length}</span>`;
+  s.appendChild(f);
+});
+function show(i){
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("on", k === cur));
+  document.getElementById("progress").style.width = ((cur+1) / slides.length * 100) + "%";
+  document.getElementById("count").textContent = (cur+1) + " / " + slides.length;
+  try { localStorage.setItem(KEY, String(cur)); } catch(e) {}
+  history.replaceState(null, "", "#" + (cur+1));
+  document.querySelectorAll(".index a").forEach((a, k) => a.classList.toggle("cur", k === cur));
+}
+function fit(){
+  const k = Math.min(window.innerWidth / 1340, (window.innerHeight - 50) / 760);
+  document.getElementById("deck").style.transform = `scale(${Math.max(0.3, k)})`;
+}
+// index
+const idx = document.getElementById("index");
+let html = `<h4>Índice</h4><div class="hint">Clique para ir · <b>I</b> ou <b>Esc</b> fecha</div>`, lastBlock = "";
+slides.forEach((s, i) => {
+  if (s.dataset.block !== lastBlock){ lastBlock = s.dataset.block; html += `<div class="grp">${lastBlock}</div>`; }
+  html += `<a data-go="${i}"><span>${String(i+1).padStart(2,"0")}</span>${s.dataset.title}</a>`;
+});
+idx.innerHTML = html;
+idx.addEventListener("click", e => { const a = e.target.closest("[data-go]"); if (a){ show(+a.dataset.go); idx.classList.remove("open"); } });
+const toggleIndex = () => idx.classList.toggle("open");
+document.getElementById("btnIndex").onclick = toggleIndex;
+document.getElementById("btnPrev").onclick = () => show(cur - 1);
+document.getElementById("btnNext").onclick = () => show(cur + 1);
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("textarea, input")) return;
+  if (["ArrowRight","PageDown"," "].includes(e.key)){ e.preventDefault(); show(cur + 1); }
+  else if (["ArrowLeft","PageUp"].includes(e.key)){ e.preventDefault(); show(cur - 1); }
+  else if (e.key === "Home") show(0);
+  else if (e.key === "End") show(slides.length - 1);
+  else if (e.key === "i" || e.key === "I") toggleIndex();
+  else if (e.key === "Escape") idx.classList.remove("open");
+});
+window.addEventListener("resize", fit);
+fit();
+let start = 0;
+const h = parseInt(location.hash.slice(1), 10);
+if (h) start = h - 1;
+else { try { start = parseInt(localStorage.getItem(KEY) || "0", 10) || 0; } catch(e) {} }
+show(start);
+</script>
+</body>
+</html>
